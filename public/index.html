@@ -2,11 +2,27 @@
 <html lang="de">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+    <meta name="theme-color" content="#F2F2F7" />
+    <meta name="description" content="Fahrschul-App zur Verwaltung von Ausbildung, Lernmaterial und Fortschritt." />
+
+    <!-- PWA: Manifest -->
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+
+    <!-- PWA: iOS Homescreen-Verhalten -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Fahrlehrer Saad" />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/icons/apple-touch-icon.png" />
+
+    <!-- Icons -->
+    <link rel="icon" type="image/png" sizes="192x192" href="%PUBLIC_URL%/icons/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="%PUBLIC_URL%/icons/icon-512.png" />
+
     <title>Fahrlehrer Saad</title>
-    <style>* { margin: 0; padding: 0; box-sizing: border-box; }</style>
   </head>
   <body>
+    <noscript>Du musst JavaScript aktivieren, um diese App zu nutzen.</noscript>
     <div id="root"></div>
   </body>
 </html>
