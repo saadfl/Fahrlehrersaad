@@ -19,7 +19,7 @@
   "id": ".",
   "display": "standalone",
   "orientation": "portrait",
-  "theme_color": "#F2F2F7",
-  "background_color": "#F2F2F7",
+  "theme_color": "#F3F2F2",
+  "background_color": "#F3F2F2",
   "description": "Fahrschul-App zur Verwaltung von Ausbildung, Lernmaterial und Fortschritt."
 }

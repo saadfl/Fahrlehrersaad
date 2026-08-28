@@ -1,26 +1,51 @@
-// ── DESIGN TOKENS ──────────────────────────────────
-// T.red ist die "Marken-Akzentfarbe". Sie wird beim Laden einer
-// Fahrschule per applyBranding() auf deren farbe_primary umgestellt.
-// Da T ein normales Objekt ist (kein React State), wirkt die Änderung
-// sofort auf alle Stellen im Code, die T.red verwenden.
-export const T = {
-  bg:"#F2F2F7", card:"rgba(255,255,255,0.85)", white:"#FFFFFF",
-  glass:"rgba(255,255,255,0.72)", glassBorder:"rgba(255,255,255,0.8)",
-  tabBg:"rgba(249,249,249,0.94)", tabBorder:"rgba(0,0,0,0.1)",
-  navBg:"rgba(242,242,247,0.9)",
-  label:"#000", label2:"rgba(60,60,67,0.6)", label3:"rgba(60,60,67,0.3)",
-  sep:"rgba(60,60,67,0.12)",
-  red:"#E63946", blue:"#007AFF", green:"#34C759",
-  orange:"#FF9500", purple:"#AF52DE", gray:"#8E8E93",
-  s1:"0 1px 4px rgba(0,0,0,0.05)", s2:"0 4px 16px rgba(0,0,0,0.08)",
-};
-export const F = "-apple-system,'SF Pro Display',BlinkMacSystemFont,sans-serif";
+import { tenantState } from "./tenant";
 
-// Setzt die Markenfarbe der aktuell geladenen Fahrschule.
+// ── DESIGN TOKENS ──────────────────────────────────
+// "Modernist"-Designsprache: flach, 0px Ecken, klare Regeln statt Schatten.
+// T.accent ist die aktuell aktive Akzentfarbe. Sie wird pro Rolle gesetzt
+// (setRoleAccent) statt fest die Markenfarbe zu sein: Schüler sehen die
+// Markenfarbe der Fahrschule, Fahrlehrer/Admin/Betreiber je eine eigene
+// Tonlage zur Orientierung beim Rollenwechsel. T.brand hält die reine
+// Markenfarbe der Fahrschule (für Stellen, die IMMER die Marke zeigen
+// sollen, z.B. Betreiber-Übersicht der Fahrschulen).
+export const T = {
+  bg:"#F3F2F2", card:"#EAE9E9", white:"#FFFFFF",
+  ink:"#201E1D", label:"#201E1D",
+  label2:"rgba(32,30,29,.62)", label3:"rgba(32,30,29,.4)",
+  sep:"rgba(32,30,29,.16)", sep2:"rgba(32,30,29,.4)",
+  red:"#EC3013", redDark:"#AE1800",
+  green:"#0E6B5E", blue:"#3B4A8F", gray:"rgba(32,30,29,.5)",
+  warnBg:"#FFE0D9", warnText:"#7C1405",
+  neutralBg:"rgba(32,30,29,.08)", neutralText:"rgba(32,30,29,.6)",
+  brand:"#EC3013", accent:"#EC3013",
+};
+export const F = "'Archivo',system-ui,sans-serif";
+
+// Feste Akzenttöne pro Rolle (Orientierungshilfe beim Rollenwechsel).
+// Schüler hat keinen eigenen Eintrag: dort gilt immer die Markenfarbe.
+const ROLE_ACCENTS = { lehrer:"#0E6B5E", admin:"#3B4A8F", owner:"#201E1D" };
+
+// Setzt Markenfarbe + Standard-Akzent der aktuell geladenen Fahrschule.
 // Wird einmal beim Laden der Fahrschule in TenantApp.js aufgerufen,
 // bevor die eigentliche App (Login/LehrerApp/SchuelerApp) gerendert wird.
 export function applyBranding(fahrschule) {
-  T.red = fahrschule?.farbe_primary || "#E63946";
+  T.brand = fahrschule?.farbe_primary || "#EC3013";
+  T.accent = T.brand;
+}
+
+// Setzt die Akzentfarbe für die aktuell aktive Rolle/Ansicht. Da T ein
+// normales Objekt ist (kein React State), reicht ein Aufruf am Anfang
+// der jeweiligen App-Hülle (LehrerApp, SchuelerApp, Betreiber) - die
+// Änderung wirkt sofort auf alle Stellen im Code, die T.accent verwenden.
+export function setRoleAccent(role) {
+  T.accent = ROLE_ACCENTS[role] || tenantState.current?.farbe_primary || T.brand;
+}
+
+// Setzt die Akzentfarbe zurück auf die reine Markenfarbe der Fahrschule.
+// Wird auf dem Login-Screen aufgerufen, damit nach dem Abmelden aus einer
+// Rolle mit eigenem Akzent (Lehrer/Admin) wieder die Markenfarbe gilt.
+export function resetAccent() {
+  T.accent = T.brand;
 }
 
 // ── AUSBILDUNG ──────────────────────────────────────
