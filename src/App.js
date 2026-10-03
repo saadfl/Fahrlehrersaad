@@ -1,18 +1,836 @@
-import { Routes, Route } from "react-router-dom";
-import Landing from "./pages/Landing";
-import Betreiber from "./pages/Betreiber";
-import TenantApp from "./TenantApp";
+import { useState, useEffect, useCallback } from "react";
+import { supabase } from "./supabase";
 
-// Zentrales Routing:
-//   /              -> Landing (spaeter: Verkaufs-/Marketingseite)
-//   /betreiber     -> Betreibermaske (nur fuer dich)
-//   /:slug         -> die App der jeweiligen Fahrschule (z.B. /saad)
-export default function App() {
+// ── DESIGN TOKENS ──────────────────────────────────
+const T = {
+  bg:"#F2F2F7", card:"rgba(255,255,255,0.85)", white:"#FFFFFF",
+  glass:"rgba(255,255,255,0.72)", glassBorder:"rgba(255,255,255,0.8)",
+  tabBg:"rgba(249,249,249,0.94)", tabBorder:"rgba(0,0,0,0.1)",
+  navBg:"rgba(242,242,247,0.9)",
+  label:"#000", label2:"rgba(60,60,67,0.6)", label3:"rgba(60,60,67,0.3)",
+  sep:"rgba(60,60,67,0.12)",
+  red:"#E63946", blue:"#007AFF", green:"#34C759",
+  orange:"#FF9500", purple:"#AF52DE", gray:"#8E8E93",
+  s1:"0 1px 4px rgba(0,0,0,0.05)", s2:"0 4px 16px rgba(0,0,0,0.08)",
+};
+const F = "-apple-system,'SF Pro Display',BlinkMacSystemFont,sans-serif";
+
+// ── AUSBILDUNG ──────────────────────────────────────
+const AUSBILDUNG = [
+  { id:"schaltkompetenz", label:"Schaltkompetenz", icon:"⚙️", color:"#FF9500", gruppen:[
+    { name:"Schaltübungen", items:["Hoch schalten","Runter schalten","Gänge überspringen"] },
+    { name:"Fahrzeugbedienung", items:["Pedal Manuell","Rollen und Schalten","Abbremsen und Schalten","Tastgeschwindigkeit"] },
+    { name:"Gefälle/Steigung", items:["Anhalten","Anfahren","Rückwärts","Sichern","Schalten"] },
+  ]},
+  { id:"grundstufe", label:"Grundstufe", icon:"📗", color:"#34C759", gruppen:[
+    { name:"Einstellen", items:["Sitz","Spiegel","Lenkrad","Kopfstütze"] },
+    { name:"Fahrzeugbedienung", items:["Lenkradhaltung","Pedale Bedienen","Gurt anlegen/anpassen","Lenkradsperre Entriegeln","Lenkradsperre Verriegeln","Anfahr-/Anhaltübung","Lenkübung"] },
+  ]},
+  { id:"aufbaustufe", label:"Aufbaustufe", icon:"📘", color:"#007AFF", gruppen:[
+    { name:"Bremsübungen", items:["Degressives Bremsen","Zielbremsung"] },
+    { name:"Fahrbahnbenutzung", items:["Einordnen","Markierung"] },
+  ]},
+  { id:"leistungsstufe", label:"Leistungsstufe", icon:"📙", color:"#FF3B30", gruppen:[
+    { name:"Spiegel, Blinker, Schulterblick", items:["Fahrstreifenwechsel","Hindernisse/Überholen","Abbiegen","Anfahren"] },
+    { name:"Abbiegen", items:["Rechts","Links","Mehrspurig","Sonderstreifen","Einbahnstraßen"] },
+    { name:"Geschwindigkeit", items:["Zone","Abbiegen","Inner-/Außerorts","Baustelle + Geschwindigkeit"] },
+    { name:"Vorfahrt/Vorrang", items:["Polizeibeamte","Linksabbieger Regel"] },
+    { name:"Ampel", items:["Normale Ampel","Pfeilampel","Normale + Pfeilampel","Normale + Räumungspfeil","Grünpfeilschild","2 Phasen Ampel","Linksabbieger Regel"] },
+    { name:"Verkehrszeichen Vorfahrt", items:["Vorfahrt gewähren","Stoppschild","Einmalige Vorfahrt","Vorfahrtsstraße","Abknickende Vorfahrt","Linksabbieger Regel"] },
+    { name:"Rechts vor Links", items:["Mäßige Geschwindigkeit","Linksabbieger Regel"] },
+    { name:"Situationen", items:["Fußgängerüberweg","Ältere/Behinderte","Kinder","Schulbus","Radfahrer","Verkehrsberuhigter Bereich","Einsatzfahrzeuge"] },
+    { name:"Fahrradstraße", items:["Geschwindigkeit","Freigabe für Kfz","Beschränkte Freigabe für Kfz"] },
+    { name:"Engpässe", items:["Geschwindigkeit","Beobachtung","Abstand"] },
+    { name:"Kreisverkehr", items:["Kreisverkehr"] },
+    { name:"Bahnübergang", items:["Warten","Überqueren"] },
+    { name:"Partnerschaftliches Verhalten", items:["Partnerschaftliches Verhalten"] },
+    { name:"Fahrbahnverengung", items:["2 Spuren münden in 1 Spur","1 Spur mündet in mehrere Spuren"] },
+    { name:"Weitere Verkehrszeichen", items:["Verbot der Einfahrt/Durchfahrt","Vorgeschriebene Fahrtrichtung","Überholverbot","Vorrang des Gegenverkehrs"] },
+  ]},
+  { id:"grundfahraufgaben", label:"Grundfahraufgaben", icon:"🎯", color:"#AF52DE", gruppen:[
+    { name:"Rückwärtsfahren", items:["Rückwärts um die Ecke"] },
+    { name:"Umkehren", items:["Einfahrt","Kreisverkehr","Wendekreis","Wendehammer"] },
+    { name:"Einparken Längs", items:["Vorwärts Rechts","Vorwärts Links","Rückwärts Rechts","Rückwärts Links"] },
+    { name:"Einparken Quer (Box)", items:["Vorwärts Rechts","Vorwärts Links","Rückwärts Rechts","Rückwärts Links"] },
+    { name:"Gefahrenbremsung", items:["Geschwindigkeit (30 km/h)","Spiegel Blinker Schulterblick","Ansage/Abbrechen"] },
+  ]},
+  { id:"pruefungssimulation", label:"Prüfungssimulation", icon:"📝", color:"#FF2D55", gruppen:[
+    { name:"Prüfungsfragen", items:["Beobachtung","Geschwindigkeit","Rechts vor Links","Linksabbieger Regel","Stoppschild","Verbotszeichen"] },
+  ]},
+  { id:"technik", label:"Technik", icon:"🔧", color:"#636366", gruppen:[
+    { name:"Motorraum/Flüssigkeitsstände", items:["Kühlflüssigkeit","Motoröl","Scheibenwischwasser","Bremsflüssigkeit"] },
+    { name:"Reifen", items:["Mindestprofiltiefe","Luftdruck","Beschädigung","Winter-/Sommerreifen"] },
+    { name:"Bremsprobe", items:["Betriebsbremse","Feststellbremse"] },
+    { name:"Beleuchtung", items:["Standlicht","Abblendlicht","Automatisches Abblendlicht","Schlechtwetterscheinwerfer","Nebelschlussleuchte","Fernlicht/Lichthupe","Warnblinkanlage","Bremslicht","Rückfahrscheinwerfer","Reflektoren/Rückstrahler"] },
+  ]},
+  { id:"sonderfahrten", label:"Sonderfahrten", icon:"🚨", color:"#32ADE6", gruppen:[
+    { name:"Überlandfahrten (5)", items:["Abstände vorne/hinten","Beobachtung Spiegel","Verkehrszeichen","Kurven","Steigung","Gefälle","Alleen","Überholen","Geschwindigkeit","Einfahren Ortschaft","Ablenkung","Orientierung"] },
+    { name:"Autobahnfahrten (4)", items:["Fahrtplanung","Einfahren BAB","Fahrstreifenwechsel","Geschwindigkeit","Abstände","Überholen","Schilder/Markierung","Rastplätze","Verhalten bei Unfällen","Stau","Leistungsgrenze","Ablenkung","Tempomat","Verlassen BAB"] },
+    { name:"Beleuchtungsfahrten (3)", items:["Beleuchtung Einschalten","Beleuchtung Kontrollieren","Beleuchtete Straße","Unbeleuchtete Straßen","Parken","Bahnübergang","Schlechte Witterung","Unbeleuchtete Verkehrsteilnehmer","Tiere/Wild","Orientierung","Blendung","Abschlussgespräch"] },
+  ]},
+];
+
+const ALL = AUSBILDUNG.flatMap(s=>s.gruppen.flatMap(g=>g.items.map(i=>`${s.id}::${g.name}::${i}`)));
+const nxt = v => ((v||0)+1)%3;
+const KLASSEN = ["B","B197","BE","B96"];
+
+// ── UI COMPONENTS ───────────────────────────────────
+const Card = ({children,style={},onClick}) => (
+  <div onClick={onClick} style={{background:T.card,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",borderRadius:20,border:`0.5px solid ${T.glassBorder}`,boxShadow:T.s2,...style,cursor:onClick?"pointer":"default"}}>{children}</div>
+);
+
+const Row = ({children,last,onClick,style={}}) => (
+  <div onClick={onClick} style={{padding:"13px 16px",display:"flex",alignItems:"center",borderBottom:last?"none":`0.5px solid ${T.sep}`,background:T.white,cursor:onClick?"pointer":"default",...style}}>{children}</div>
+);
+
+const Ring = ({pct,size=72,stroke=6}) => {
+  const r=(size-stroke*2)/2, c=2*Math.PI*r;
+  const col=pct>=80?T.green:pct>=40?T.orange:T.red;
   return (
-    <Routes>
-      <Route path="/" element={<Landing/>}/>
-      <Route path="/betreiber" element={<Betreiber/>}/>
-      <Route path="/:slug" element={<TenantApp/>}/>
-    </Routes>
+    <div style={{position:"relative",width:size,height:size,flexShrink:0}}>
+      <svg width={size} height={size} style={{transform:"rotate(-90deg)"}}>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={T.sep} strokeWidth={stroke}/>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={col} strokeWidth={stroke}
+          strokeDasharray={c} strokeDashoffset={c*(1-pct/100)} strokeLinecap="round"/>
+      </svg>
+      <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <span style={{fontSize:size>60?14:11,fontWeight:700,color:T.label,fontFamily:F}}>{pct}%</span>
+      </div>
+    </div>
+  );
+};
+
+const TabBar = ({active,onChange,isLehrer}) => {
+  const tabs = isLehrer
+    ? [{id:"home",e:"🏠",l:"Home"},{id:"schueler",e:"👥",l:"Schüler"},{id:"material",e:"📚",l:"Material"},{id:"profil",e:"👨‍🏫",l:"Profil"}]
+    : [{id:"home",e:"🏠",l:"Home"},{id:"diagramm",e:"📊",l:"Diagramm"},{id:"lernen",e:"📚",l:"Lernen"},{id:"profil",e:"👨‍🏫",l:"Fahrlehrer"}];
+  return (
+    <div style={{position:"fixed",bottom:0,left:0,right:0,height:83,background:T.tabBg,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",borderTop:`0.5px solid ${T.tabBorder}`,display:"flex",alignItems:"flex-start",justifyContent:"space-around",padding:"10px 0 0",zIndex:999,fontFamily:F}}>
+      {tabs.map(t=>(
+        <button key={t.id} onClick={()=>onChange(t.id)} style={{background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3,minWidth:60,padding:"2px 8px"}}>
+          <span style={{fontSize:26,filter:active===t.id?"none":"grayscale(1)",opacity:active===t.id?1:0.35,transition:"all .15s"}}>{t.e}</span>
+          <span style={{fontSize:10,fontWeight:active===t.id?600:400,color:active===t.id?T.red:T.label2,transition:"color .15s"}}>{t.l}</span>
+        </button>
+      ))}
+    </div>
+  );
+};
+
+const NavBar = ({title,onBack}) => (
+  <div style={{position:"sticky",top:0,zIndex:100,background:T.navBg,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",borderBottom:`0.5px solid ${T.sep}`,height:52,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 16px",fontFamily:F}}>
+    <button onClick={onBack} style={{background:"none",border:"none",cursor:"pointer",color:T.red,fontSize:16,fontWeight:500,fontFamily:F,minWidth:70}}>‹ Zurück</button>
+    <span style={{fontSize:16,fontWeight:600,color:T.label}}>{title}</span>
+    <div style={{minWidth:70}}/>
+  </div>
+);
+
+// ── LOGIN ───────────────────────────────────────────
+function Login({onLogin}) {
+  const [name,setName]=useState(""); const [pin,setPin]=useState("");
+  const [err,setErr]=useState(""); const [load,setLoad]=useState(false);
+  const go=async()=>{
+    setErr(""); setLoad(true);
+    if(name.trim().toLowerCase()==="lehrer"&&pin==="9999"){onLogin({role:"lehrer"});return;}
+    const {data,error}=await supabase.from("schueler").select("*").ilike("name",name.trim()).eq("pin",pin).single();
+    setLoad(false);
+    if(error||!data){setErr("Name oder PIN falsch.");return;}
+    onLogin({role:"schueler",schueler:data});
+  };
+  const inp={width:"100%",boxSizing:"border-box",background:T.bg,border:`0.5px solid ${T.sep}`,borderRadius:12,padding:"12px 16px",fontSize:15,color:T.label,outline:"none",fontFamily:F};
+  return (
+    <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#fff5f5 0%,#F2F2F7 60%)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,fontFamily:F}}>
+      <div style={{textAlign:"center",marginBottom:40}}>
+        <div style={{width:88,height:88,borderRadius:22,background:`linear-gradient(135deg,${T.red},#c1121f)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:44,margin:"0 auto 16px",boxShadow:`0 12px 40px ${T.red}44`}}>🚗</div>
+        <div style={{fontSize:32,fontWeight:700,color:T.label,letterSpacing:-0.5}}>Fahrlehrer <span style={{color:T.red}}>Saad</span></div>
+        <div style={{fontSize:15,color:T.label2,marginTop:6}}>Ausbildung · Lernmaterial · Fortschritt</div>
+      </div>
+      <Card style={{width:"100%",maxWidth:380,padding:28}}>
+        <div style={{fontSize:22,fontWeight:700,color:T.label,marginBottom:22}}>Anmelden</div>
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:7}}>Name</div>
+          <input value={name} onChange={e=>setName(e.target.value)} placeholder="Vor- und Nachname" onKeyDown={e=>e.key==="Enter"&&go()} style={inp}/>
+        </div>
+        <div style={{marginBottom:22}}>
+          <div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:7}}>PIN</div>
+          <input value={pin} onChange={e=>setPin(e.target.value)} type="password" maxLength={8} onKeyDown={e=>e.key==="Enter"&&go()} style={{...inp,fontSize:22,letterSpacing:6}}/>
+        </div>
+        {err&&<div style={{background:"#FFF2F2",color:T.red,borderRadius:10,padding:"10px 14px",fontSize:13,marginBottom:16,border:`0.5px solid ${T.red}33`}}>{err}</div>}
+        <button onClick={go} disabled={load} style={{width:"100%",background:T.red,color:"#fff",border:"none",borderRadius:14,padding:14,fontSize:16,fontWeight:600,cursor:"pointer",opacity:load?0.7:1,fontFamily:F,boxShadow:`0 6px 24px ${T.red}44`}}>{load?"Anmelden...":"Anmelden"}</button>
+      </Card>
+    </div>
+  );
+}
+
+// ── APP ROOT ────────────────────────────────────────
+export default function App() {
+  const [user,setUser]=useState(null);
+  if(!user) return <Login onLogin={setUser}/>;
+  if(user.role==="lehrer") return <LehrerApp onLogout={()=>setUser(null)}/>;
+  return <SchuelerApp schueler={user.schueler} onLogout={()=>setUser(null)}/>;
+}
+
+// ── LEHRER APP ──────────────────────────────────────
+function LehrerApp({onLogout}) {
+  const [tab,setTab]=useState("home");
+  const [liste,setListe]=useState([]);
+  const [mat,setMat]=useState({});
+  const [screen,setScreen]=useState(null);
+  const [zuletzt,setZuletzt]=useState([]);
+
+  const ladeListe=useCallback(async()=>{const{data}=await supabase.from("schueler").select("*").order("name");setListe(data||[]);},[]);
+  const ladeMat=useCallback(async()=>{
+    const[m,q]=await Promise.all([supabase.from("lernmaterial").select("*"),supabase.from("quiz_fragen").select("*")]);
+    const map={};
+    (m.data||[]).forEach(x=>{map[x.item_key]={videoUrl:x.video_url||"",fotos:x.fotos||[],quiz:[],pdfUrl:x.pdf_url||"",pdfName:x.pdf_name||""};});
+    (q.data||[]).forEach(x=>{if(!map[x.item_key])map[x.item_key]={videoUrl:"",fotos:[],quiz:[],pdfUrl:"",pdfName:""};map[x.item_key].quiz.push({id:x.id,frage:x.frage,typ:x.typ,antworten:x.antworten||[],richtig:x.richtig,erklaerung:x.erklaerung||"",bildUrl:x.bild_url||""});});
+    setMat(map);
+  },[]);
+
+  useEffect(()=>{ladeListe();ladeMat();},[ladeListe,ladeMat]);
+
+  const openS=s=>{setZuletzt(p=>[s,...p.filter(x=>x.id!==s.id)].slice(0,5));setScreen({type:"s",s});};
+
+  const aktiv=liste.filter(s=>!["archiviert","abgeschlossen"].includes(s.status||"aktiv"));
+  const archiv=liste.filter(s=>["archiviert","abgeschlossen"].includes(s.status||"aktiv"));
+
+  if(screen?.type==="s") return <div style={{fontFamily:F,background:T.bg,minHeight:"100vh"}}><NavBar title={screen.s.name} onBack={()=>{setScreen(null);ladeListe();}}/><div style={{paddingBottom:20}}><DiagrammView s={screen.s} mat={mat} setMat={setMat} onMat={k=>setScreen({type:"m",k,back:screen})} isLehrer/></div></div>;
+  if(screen?.type==="m") return <div style={{fontFamily:F,background:T.bg,minHeight:"100vh"}}><NavBar title={screen.k.split("::")[1]||"Material"} onBack={()=>setScreen(screen.back||null)}/><div style={{paddingBottom:20}}><MatView ik={screen.k} mat={mat} setMat={setMat} isLehrer/></div></div>;
+  if(screen?.type==="neu") return <div style={{fontFamily:F,background:T.bg,minHeight:"100vh"}}><NavBar title="Neuer Schüler" onBack={()=>setScreen(null)}/><NeuerS onSaved={()=>{ladeListe();setScreen(null);}}/></div>;
+
+  const tabs={
+    home:<LehrerHome liste={liste} zuletzt={zuletzt} aktiv={aktiv} archiv={archiv} onOpen={openS} onNeu={()=>setScreen({type:"neu"})} onAlle={()=>setTab("schueler")}/>,
+    schueler:<SListe liste={liste} aktiv={aktiv} archiv={archiv} onOpen={openS} onNeu={()=>setScreen({type:"neu"})} onRefresh={ladeListe}/>,
+    material:<MatListe mat={mat} onOpen={k=>setScreen({type:"m",k,back:null})}/>,
+    profil:<Profil onLogout={onLogout} isLehrer/>,
+  };
+
+  return <div style={{fontFamily:F,background:T.bg,minHeight:"100vh"}}><div style={{paddingBottom:83}}>{tabs[tab]}</div><TabBar active={tab} onChange={setTab} isLehrer/></div>;
+}
+
+// ── LEHRER HOME ─────────────────────────────────────
+function LehrerHome({liste,zuletzt,aktiv,archiv,onOpen,onNeu,onAlle}) {
+  return (
+    <div style={{background:T.bg,minHeight:"100vh",padding:"20px 16px 0"}}>
+      <div style={{marginBottom:24}}>
+        <div style={{fontSize:11,color:T.red,fontWeight:700,letterSpacing:1,marginBottom:2,fontFamily:F}}>FAHRLEHRER SAAD</div>
+        <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,fontFamily:F}}>Dashboard</div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:24}}>
+        {[{v:liste.length,l:"Gesamt",c:T.blue,e:"👥"},{v:aktiv.length,l:"Aktiv",c:T.green,e:"🎯"},{v:archiv.length,l:"Archiv",c:T.gray,e:"📦"}].map((s,i)=>(
+          <Card key={i} onClick={onAlle} style={{padding:"14px 10px",textAlign:"center"}}>
+            <div style={{fontSize:22,marginBottom:4}}>{s.e}</div>
+            <div style={{fontSize:26,fontWeight:700,color:s.c,fontFamily:F}}>{s.v}</div>
+            <div style={{fontSize:11,color:T.label2,marginTop:2,fontFamily:F}}>{s.l}</div>
+          </Card>
+        ))}
+      </div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <div style={{fontSize:11,color:T.label2,fontWeight:700,letterSpacing:0.8,textTransform:"uppercase",fontFamily:F}}>Zuletzt geöffnet</div>
+        <button onClick={onNeu} style={{background:T.red,color:"#fff",border:"none",borderRadius:999,padding:"7px 16px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:F,boxShadow:`0 3px 12px ${T.red}44`}}>+ Neu</button>
+      </div>
+      {zuletzt.length===0
+        ?<Card style={{padding:32,textAlign:"center",marginBottom:24}}>
+            <div style={{fontSize:40,marginBottom:12}}>👥</div>
+            <div style={{fontSize:15,color:T.label2,marginBottom:16,fontFamily:F}}>Noch kein Schüler geöffnet</div>
+            <button onClick={onNeu} style={{background:T.red,color:"#fff",border:"none",borderRadius:999,padding:"10px 20px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:F}}>Ersten Schüler anlegen</button>
+          </Card>
+        :<div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:24}}>
+            {zuletzt.filter(s=>liste.find(x=>x.id===s.id)).map(s=>{const a=liste.find(x=>x.id===s.id)||s;return <SRow key={s.id} s={a} onClick={()=>onOpen(a)}/>;} )}
+            <button onClick={onAlle} style={{background:"none",border:`0.5px solid ${T.sep}`,borderRadius:14,padding:"12px",fontSize:14,color:T.blue,cursor:"pointer",fontFamily:F,textAlign:"center"}}>Alle Schüler ({liste.length}) →</button>
+          </div>
+      }
+      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:24}}>
+        {[{e:"🏆",t:"Prüfungsreife",d:"Bald verfügbar"},{e:"📖",t:"Theorie",d:"14 Lektionen"}].map((x,i)=>(
+          <Card key={i} style={{padding:14,opacity:0.55}}>
+            <div style={{display:"flex",alignItems:"center",gap:12,justifyContent:"space-between"}}>
+              <div style={{display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:26}}>{x.e}</span><div><div style={{fontSize:15,fontWeight:600,color:T.label,fontFamily:F}}>{x.t}</div><div style={{fontSize:12,color:T.label2,fontFamily:F}}>{x.d}</div></div></div>
+              <div style={{background:`${T.purple}18`,color:T.purple,borderRadius:999,padding:"3px 10px",fontSize:11,fontWeight:700,fontFamily:F}}>Bald</div>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── SCHÜLER ROW ─────────────────────────────────────
+function SRow({s,onClick}) {
+  const [pct,setPct]=useState(0);
+  useEffect(()=>{supabase.from("ausbildungsstand").select("wert").eq("schueler_id",s.id).then(({data})=>setPct(Math.round(((data||[]).filter(x=>x.wert===2).length/ALL.length)*100)));},[s.id]);
+  const status=s.status||"aktiv";
+  const sc=status==="aktiv"?T.green:status==="abgeschlossen"?T.purple:T.gray;
+  return (
+    <Card onClick={onClick} style={{padding:"14px 16px"}}>
+      <div style={{display:"flex",alignItems:"center",gap:14}}>
+        <Ring pct={pct} size={50} stroke={5}/>
+        <div style={{flex:1}}>
+          <div style={{fontSize:16,fontWeight:600,color:T.label,fontFamily:F,marginBottom:3}}>{s.name}</div>
+          <div style={{display:"flex",alignItems:"center",gap:6}}><div style={{width:7,height:7,borderRadius:"50%",background:sc}}/><span style={{fontSize:12,color:T.label2,fontFamily:F}}>{status==="aktiv"?"Aktiv":status==="abgeschlossen"?"Abgeschlossen":"Archiviert"}</span></div>
+        </div>
+        <span style={{color:T.label3,fontSize:22}}>›</span>
+      </div>
+    </Card>
+  );
+}
+
+// ── SCHÜLER LISTE ───────────────────────────────────
+function SListe({liste,aktiv,archiv,onOpen,onNeu,onRefresh}) {
+  const [suche,setSuche]=useState(""); const [arc,setArc]=useState(false);
+  const statusAendern=async(id,st)=>{await supabase.from("schueler").update({status:st}).eq("id",id);onRefresh();};
+  const loeschen=async(id)=>{await supabase.from("schueler").delete().eq("id",id);onRefresh();};
+  const z=(arc?archiv:aktiv).filter(s=>s.name.toLowerCase().includes(suche.toLowerCase()));
+  return (
+    <div style={{background:T.bg,minHeight:"100vh",padding:"20px 16px 0"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:16}}>
+        <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,fontFamily:F}}>Schüler</div>
+        <button onClick={onNeu} style={{background:T.red,color:"#fff",border:"none",borderRadius:999,padding:"8px 16px",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:F,boxShadow:`0 3px 12px ${T.red}44`}}>+ Neu</button>
+      </div>
+      <div style={{background:T.bg,borderRadius:12,padding:"9px 14px",display:"flex",gap:8,alignItems:"center",marginBottom:14,border:`0.5px solid ${T.sep}`}}>
+        <span style={{color:T.label2}}>🔍</span>
+        <input value={suche} onChange={e=>setSuche(e.target.value)} placeholder="Suchen..." style={{background:"none",border:"none",outline:"none",fontSize:15,color:T.label,flex:1,fontFamily:F}}/>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:0,background:T.bg,borderRadius:10,padding:2,marginBottom:16,border:`0.5px solid ${T.sep}`}}>
+        {[{l:`Aktiv (${aktiv.length})`,v:false},{l:`Archiv (${archiv.length})`,v:true}].map(t=>(
+          <button key={String(t.v)} onClick={()=>setArc(t.v)} style={{background:arc===t.v?"#fff":"transparent",border:"none",borderRadius:8,padding:"8px",fontSize:13,fontWeight:600,cursor:"pointer",color:arc===t.v?T.label:T.label2,fontFamily:F,boxShadow:arc===t.v?T.s1:"none",transition:"all .2s"}}>{t.l}</button>
+        ))}
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:24}}>
+        {z.length===0&&<Card style={{padding:32,textAlign:"center"}}><div style={{color:T.label2,fontFamily:F}}>Keine Schüler</div></Card>}
+        {z.map(s=><SRowFull key={s.id} s={s} onClick={()=>onOpen(s)} onSA={statusAendern} onDel={loeschen}/>)}
+      </div>
+    </div>
+  );
+}
+
+function SRowFull({s,onClick,onSA,onDel}) {
+  const [pct,setPct]=useState(0); const [show,setShow]=useState(false); const [del,setDel]=useState(false);
+  useEffect(()=>{supabase.from("ausbildungsstand").select("wert").eq("schueler_id",s.id).then(({data})=>setPct(Math.round(((data||[]).filter(x=>x.wert===2).length/ALL.length)*100)));},[s.id]);
+  if(del) return <Card style={{padding:20}}><div style={{textAlign:"center",marginBottom:14}}><div style={{fontSize:36,marginBottom:8}}>⚠️</div><div style={{fontSize:16,fontWeight:600,color:T.label,fontFamily:F}}>{s.name} löschen?</div></div><div style={{display:"flex",gap:10}}><button onClick={()=>onDel(s.id)} style={{flex:1,background:T.red,color:"#fff",border:"none",borderRadius:12,padding:"12px",fontWeight:600,cursor:"pointer",fontFamily:F}}>Löschen</button><button onClick={()=>setDel(false)} style={{flex:1,background:T.bg,border:`0.5px solid ${T.sep}`,borderRadius:12,padding:"12px",cursor:"pointer",fontFamily:F}}>Abbrechen</button></div></Card>;
+  return (
+    <Card>
+      <div onClick={onClick} style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:14,cursor:"pointer"}}>
+        <Ring pct={pct} size={50} stroke={5}/>
+        <div style={{flex:1}}><div style={{fontSize:16,fontWeight:600,color:T.label,fontFamily:F}}>{s.name}</div><div style={{fontSize:12,color:T.label2,fontFamily:F,marginTop:2}}>{s.status==="aktiv"?"🟢 Aktiv":s.status==="abgeschlossen"?"✅ Abgeschlossen":"📦 Archiviert"}</div></div>
+        <button onClick={e=>{e.stopPropagation();setShow(!show);}} style={{background:"none",border:"none",cursor:"pointer",fontSize:20,color:T.label2,padding:4}}>⋯</button>
+      </div>
+      {show&&<div style={{borderTop:`0.5px solid ${T.sep}`,display:"flex",flexWrap:"wrap",gap:8,padding:"10px 14px"}}>
+        {s.status!=="aktiv"&&<button onClick={()=>onSA(s.id,"aktiv")} style={{fontSize:12,background:`${T.green}18`,color:T.green,border:"none",borderRadius:999,padding:"5px 12px",cursor:"pointer",fontWeight:600,fontFamily:F}}>🟢 Aktiv</button>}
+        {s.status!=="abgeschlossen"&&<button onClick={()=>onSA(s.id,"abgeschlossen")} style={{fontSize:12,background:`${T.purple}18`,color:T.purple,border:"none",borderRadius:999,padding:"5px 12px",cursor:"pointer",fontWeight:600,fontFamily:F}}>✅ Abgeschlossen</button>}
+        {s.status!=="archiviert"&&<button onClick={()=>onSA(s.id,"archiviert")} style={{fontSize:12,background:`${T.gray}18`,color:T.gray,border:"none",borderRadius:999,padding:"5px 12px",cursor:"pointer",fontWeight:600,fontFamily:F}}>📦 Archivieren</button>}
+        <button onClick={()=>setDel(true)} style={{fontSize:12,background:`${T.red}18`,color:T.red,border:"none",borderRadius:999,padding:"5px 12px",cursor:"pointer",fontWeight:600,fontFamily:F}}>🗑 Löschen</button>
+      </div>}
+    </Card>
+  );
+}
+
+// ── NEUER SCHÜLER ───────────────────────────────────
+function NeuerS({onSaved}) {
+  const [f,setF]=useState({name:"",pin:""}); const [err,setErr]=useState(""); const [saving,setSaving]=useState(false); const [ok,setOk]=useState(null);
+  const go=async()=>{
+    if(!f.name.trim()){setErr("Namen eingeben.");return;} if(f.pin.length<4){setErr("PIN mind. 4 Stellen.");return;}
+    setSaving(true);
+    const{data,error}=await supabase.from("schueler").insert({name:f.name.trim(),pin:f.pin,status:"aktiv"}).select().single();
+    setSaving(false);
+    if(error){setErr("Fehler: "+error.message);return;}
+    await supabase.from("schueler_info").insert({schueler_id:data.id,klassen:[],sehhilfe:"Keine",theorie:false,fahrlehrer:""});
+    setOk({name:f.name.trim(),pin:f.pin}); onSaved();
+  };
+  if(ok) return <div style={{padding:"48px 20px",textAlign:"center",fontFamily:F}}><div style={{fontSize:64,marginBottom:16}}>🎉</div><div style={{fontSize:24,fontWeight:700,color:T.label,marginBottom:16}}>Schüler angelegt!</div><Card style={{padding:20,textAlign:"left"}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><span style={{color:T.label2}}>Name</span><span style={{fontWeight:600}}>{ok.name}</span></div><div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:T.label2}}>PIN</span><span style={{fontWeight:700,fontSize:22,letterSpacing:4,color:T.blue}}>{ok.pin}</span></div></Card></div>;
+  return (
+    <div style={{padding:"20px 16px",fontFamily:F}}>
+      <Card style={{padding:24}}>
+        <div style={{fontSize:20,fontWeight:700,color:T.label,marginBottom:20}}>Neuer Schüler</div>
+        <div style={{marginBottom:14}}><div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:7}}>Vor- und Nachname *</div><input style={{width:"100%",boxSizing:"border-box",background:T.bg,border:`0.5px solid ${T.sep}`,borderRadius:12,padding:"12px 16px",fontSize:15,color:T.label,outline:"none",fontFamily:F}} value={f.name} onChange={e=>setF({...f,name:e.target.value})} placeholder="z.B. Max Mustermann"/></div>
+        <div style={{marginBottom:20}}><div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:7}}>PIN (mind. 4 Stellen) *</div><input style={{width:"100%",boxSizing:"border-box",background:T.bg,border:`0.5px solid ${T.sep}`,borderRadius:12,padding:"12px 16px",fontSize:22,color:T.label,outline:"none",letterSpacing:6,fontFamily:F}} type="password" maxLength={8} value={f.pin} onChange={e=>setF({...f,pin:e.target.value.replace(/\D/g,"")})}/><div style={{fontSize:12,color:T.label2,marginTop:6}}>💡 PIN persönlich mitteilen</div></div>
+        {err&&<div style={{background:"#FFF2F2",color:T.red,borderRadius:10,padding:"10px 14px",fontSize:13,marginBottom:14}}>{err}</div>}
+        <button onClick={go} disabled={saving} style={{width:"100%",background:T.red,color:"#fff",border:"none",borderRadius:14,padding:14,fontSize:16,fontWeight:600,cursor:"pointer",opacity:saving?0.7:1,fontFamily:F,boxShadow:`0 6px 24px ${T.red}44`}}>{saving?"Speichern...":"✓ Schüler anlegen"}</button>
+      </Card>
+    </div>
+  );
+}
+
+// ── DIAGRAMM VIEW ───────────────────────────────────
+function DiagrammView({s,mat,setMat,onMat,isLehrer}) {
+  const [sel,setSel]=useState(AUSBILDUNG[0].id);
+  const [tab,setTab]=useState("diagramm");
+  const [themen,setThemen]=useState({}); const [naechstes,setNaechstes]=useState({});
+  const [notizen,setNotizen]=useState([]); const [info,setInfo]=useState(null);
+  const [infoF,setInfoF]=useState({klassen:[],sehhilfe:"Keine",theorie:false});
+  const [editI,setEditI]=useState(false); const [pinVis,setPinVis]=useState(false);
+  const [notizT,setNotizT]=useState(""); const [load,setLoad]=useState(true);
+
+  const laden=useCallback(async()=>{
+    setLoad(true);
+    const[t,n,i]=await Promise.all([
+      supabase.from("ausbildungsstand").select("*").eq("schueler_id",s.id),
+      supabase.from("notizen").select("*").eq("schueler_id",s.id).order("erstellt_am",{ascending:false}),
+      supabase.from("schueler_info").select("*").eq("schueler_id",s.id).single(),
+    ]);
+    const tm={},nm={};
+    (t.data||[]).forEach(x=>{tm[x.item_key]=Number(x.wert);if(x.naechstes)nm[x.item_key]=true;});
+    setThemen(tm);setNaechstes(nm);setNotizen(n.data||[]);
+    if(i.data){setInfo(i.data);setInfoF({klassen:i.data.klassen||[],sehhilfe:i.data.sehhilfe||"Keine",theorie:i.data.theorie||false});}
+    setLoad(false);
+  },[s.id]);
+  useEffect(()=>{laden();},[laden]);
+
+  const toggle=async k=>{const v=nxt(themen[k]||0);setThemen(p=>({...p,[k]:v}));await supabase.from("ausbildungsstand").upsert({schueler_id:s.id,item_key:k,wert:v,aktualisiert_am:new Date().toISOString()},{onConflict:"schueler_id,item_key"});};
+  const toggleN=async k=>{const ist=!!naechstes[k];const nm={...naechstes};if(ist)delete nm[k];else nm[k]=true;setNaechstes(nm);await supabase.from("ausbildungsstand").upsert({schueler_id:s.id,item_key:k,wert:themen[k]||0,naechstes:!ist,aktualisiert_am:new Date().toISOString()},{onConflict:"schueler_id,item_key"});};
+  const saveInfo=async()=>{await supabase.from("schueler_info").upsert({schueler_id:s.id,...infoF,aktualisiert_am:new Date().toISOString()},{onConflict:"schueler_id"});setInfo(p=>({...p,...infoF}));setEditI(false);};
+
+  const pct=Math.round((Object.values(themen).filter(v=>v===2).length/ALL.length)*100);
+  const stufe=AUSBILDUNG.find(x=>x.id===sel)||AUSBILDUNG[0];
+
+  if(load) return <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:80}}><span style={{fontSize:36}}>⏳</span></div>;
+
+  return (
+    <div style={{padding:"16px 16px 0",fontFamily:F}}>
+      <Card style={{padding:18,marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:14}}>
+          <Ring pct={pct} size={64}/>
+          <div style={{flex:1}}>
+            <div style={{fontSize:20,fontWeight:700,color:T.label,marginBottom:5}}>{isLehrer?s.name:"Mein Fortschritt"}</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {(info?.klassen||[]).map(k=><span key={k} style={{background:`${T.blue}18`,color:T.blue,borderRadius:999,padding:"3px 10px",fontSize:12,fontWeight:600}}>{k}</span>)}
+              {isLehrer&&<span style={{background:info?.theorie?`${T.green}18`:`${T.orange}18`,color:info?.theorie?T.green:T.orange,borderRadius:999,padding:"3px 10px",fontSize:12,fontWeight:600}}>{info?.theorie?"✅ Theorie":"⏳ Theorie"}</span>}
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {Object.keys(naechstes).length>0&&(
+        <div style={{background:`${T.blue}10`,border:`0.5px solid ${T.blue}30`,borderRadius:16,padding:14,marginBottom:14}}>
+          <div style={{fontSize:11,color:T.blue,fontWeight:700,letterSpacing:0.8,marginBottom:10}}>📍 ALS NÄCHSTES GEPLANT</div>
+          {Object.keys(naechstes).map(k=>{
+            const p=k.split("::");const so=AUSBILDUNG.find(x=>x.id===p[0]);const mk=`${p[0]}::${p[1]}`;
+            const hm=mat&&mat[mk]&&(mat[mk].videoUrl||mat[mk].fotos?.length>0||mat[mk].quiz?.length>0);
+            return <div key={k} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:`0.5px solid ${T.blue}20`}}>
+              <span style={{fontSize:18}}>{so?.icon||"📍"}</span>
+              <div style={{flex:1}}><div style={{fontSize:14,fontWeight:600,color:T.label}}>{p[2]}</div><div style={{fontSize:12,color:T.label2}}>{so?.label} · {p[1]}</div></div>
+              {hm&&onMat&&<button onClick={()=>onMat(mk)} style={{background:T.blue,color:"#fff",border:"none",borderRadius:999,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:F}}>📚</button>}
+            </div>;
+          })}
+        </div>
+      )}
+
+      <div style={{display:"grid",gridTemplateColumns:isLehrer?"1fr 1fr 1fr":"1fr 1fr",gap:0,background:T.bg,borderRadius:10,padding:2,marginBottom:14,border:`0.5px solid ${T.sep}`}}>
+        {[["diagramm","📊 Diagramm"],["notizen","📝 Notizen"],...(isLehrer?[["akte","👤 Akte"]]:[])].map(([k,l])=>(
+          <button key={k} onClick={()=>setTab(k)} style={{background:tab===k?"#fff":"transparent",border:"none",borderRadius:8,padding:"8px",fontSize:12,fontWeight:600,cursor:"pointer",color:tab===k?T.label:T.label2,fontFamily:F,boxShadow:tab===k?T.s1:"none",transition:"all .2s"}}>{l}</button>
+        ))}
+      </div>
+
+      {tab==="diagramm"&&<>
+        <div style={{display:"flex",gap:8,marginBottom:14,overflowX:"auto",paddingBottom:4}}>
+          {AUSBILDUNG.map(x=>{
+            const ks=x.gruppen.flatMap(g=>g.items.map(i=>`${x.id}::${g.name}::${i}`));
+            const sp=Math.round((ks.filter(k=>(themen[k]||0)===2).length/ks.length)*100);
+            const act=sel===x.id;
+            return <button key={x.id} onClick={()=>setSel(x.id)} style={{background:act?x.color:"rgba(255,255,255,0.7)",backdropFilter:"blur(10px)",border:`0.5px solid ${act?x.color:T.sep}`,borderRadius:14,padding:"10px 14px",flexShrink:0,display:"flex",flexDirection:"column",alignItems:"center",gap:3,minWidth:70,cursor:"pointer",fontFamily:F,boxShadow:act?`0 4px 16px ${x.color}44`:T.s1,transition:"all .2s"}}>
+              <span style={{fontSize:20}}>{x.icon}</span>
+              <span style={{fontSize:10,color:act?"#fff":T.label2,fontWeight:600}}>{x.label}</span>
+              <span style={{fontSize:12,fontWeight:700,color:act?"#fff":x.color}}>{sp}%</span>
+            </button>;
+          })}
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:20}}>
+          {stufe.gruppen.map(g=>{
+            const gk=g.items.map(i=>`${stufe.id}::${g.name}::${i}`);
+            const gb=gk.filter(k=>(themen[k]||0)===2).length;
+            const mk=`${stufe.id}::${g.name}`;
+            const hm=mat&&mat[mk]&&(mat[mk].videoUrl||mat[mk].fotos?.length>0||mat[mk].quiz?.length>0);
+            return <div key={g.name} style={{background:T.white,borderRadius:16,overflow:"hidden",boxShadow:T.s1}}>
+              <div style={{padding:"13px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:`0.5px solid ${T.sep}`}}>
+                <span style={{fontSize:15,fontWeight:600,color:T.label,fontFamily:F}}>{g.name}</span>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <button onClick={()=>onMat&&onMat(mk)} style={{background:hm?`${T.blue}18`:`${T.gray}10`,color:hm?T.blue:T.gray,border:`0.5px solid ${hm?T.blue+"30":T.sep}`,borderRadius:999,padding:"4px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:F}}>{hm?"📚 Material":"+ Material"}</button>
+                  <span style={{fontSize:12,color:T.label2}}>{gb}/{g.items.length}</span>
+                </div>
+              </div>
+              {g.items.map((item,i)=>{
+                const k=`${stufe.id}::${g.name}::${item}`;
+                const v=themen[k]||0;
+                const col=v===2?T.green:v===1?T.orange:T.label3;
+                return <div key={item} style={{padding:"12px 16px",display:"flex",alignItems:"center",gap:10,borderBottom:i<g.items.length-1?`0.5px solid ${T.sep}`:"none",background:naechstes[k]?`${T.blue}06`:"transparent"}}>
+                  <div style={{width:8,height:8,borderRadius:"50%",background:col,flexShrink:0}}/>
+                  <span style={{flex:1,fontSize:14,color:T.label,fontFamily:F}}>{item}</span>
+                  {naechstes[k]&&<span style={{fontSize:10,background:`${T.blue}15`,color:T.blue,borderRadius:999,padding:"2px 8px",fontWeight:600}}>Nächstes</span>}
+                  {isLehrer&&<button onClick={()=>toggleN(k)} style={{background:"none",border:"none",cursor:"pointer",fontSize:14,opacity:naechstes[k]?1:0.2,padding:0,flexShrink:0}}>📍</button>}
+                  <button onClick={isLehrer?()=>toggle(k):undefined} style={{background:"none",border:"none",cursor:isLehrer?"pointer":"default",padding:0,flexShrink:0}}>
+                    <div style={{width:56,height:5,background:T.sep,borderRadius:99,overflow:"hidden"}}><div style={{height:"100%",borderRadius:99,width:v===2?"100%":v===1?"50%":"0%",background:col,transition:"width .25s"}}/></div>
+                  </button>
+                </div>;
+              })}
+            </div>;
+          })}
+        </div>
+      </>}
+
+      {tab==="notizen"&&<div style={{marginBottom:20}}>
+        {isLehrer&&<Card style={{padding:16,marginBottom:14}}>
+          <div style={{fontSize:15,fontWeight:600,color:T.label,marginBottom:12}}>Neue Notiz</div>
+          <textarea value={notizT} onChange={e=>setNotizT(e.target.value)} placeholder="Notiz für den Schüler..." style={{width:"100%",boxSizing:"border-box",background:T.bg,border:`0.5px solid ${T.sep}`,borderRadius:12,padding:"12px",fontSize:14,color:T.label,outline:"none",minHeight:80,resize:"vertical",fontFamily:F,marginBottom:10}}/>
+          <button onClick={async()=>{if(!notizT.trim())return;const{data}=await supabase.from("notizen").insert({schueler_id:s.id,text:notizT.trim(),datum:new Date().toISOString().split("T")[0]}).select().single();if(data)setNotizen(p=>[data,...p]);setNotizT("");}} style={{width:"100%",background:T.blue,color:"#fff",border:"none",borderRadius:12,padding:"12px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:F}}>Speichern</button>
+        </Card>}
+        {notizen.length===0&&<Card style={{padding:32,textAlign:"center"}}><div style={{color:T.label2}}>Noch keine Notizen</div></Card>}
+        {notizen.map(n=><Card key={n.id} style={{padding:16,marginBottom:8,borderLeft:`3px solid ${T.blue}`}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+            <div style={{fontSize:12,color:T.label2,fontWeight:500}}>👨‍🏫 {new Date(n.datum).toLocaleDateString("de-DE",{day:"2-digit",month:"long",year:"numeric"})}</div>
+            {isLehrer&&<button onClick={async()=>{await supabase.from("notizen").delete().eq("id",n.id);setNotizen(p=>p.filter(x=>x.id!==n.id));}} style={{background:"none",border:"none",cursor:"pointer",color:T.label2,fontSize:16}}>🗑</button>}
+          </div>
+          <div style={{fontSize:14,color:T.label,lineHeight:1.6}}>{n.text}</div>
+        </Card>)}
+      </div>}
+
+      {tab==="akte"&&isLehrer&&<div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:20}}>
+        <div style={{background:T.white,borderRadius:16,overflow:"hidden",boxShadow:T.s1}}>
+          <Row><span style={{flex:1,fontSize:15,color:T.label}}>Name</span><span style={{fontSize:15,fontWeight:500}}>{s.name}</span></Row>
+          <Row last><span style={{flex:1,fontSize:15,color:T.label}}>PIN</span>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <span style={{fontSize:18,fontWeight:700,letterSpacing:pinVis?3:2,color:T.blue}}>{pinVis?s.pin:"••••"}</span>
+              <button onClick={()=>setPinVis(!pinVis)} style={{background:`${T.blue}18`,color:T.blue,border:"none",borderRadius:8,padding:"4px 10px",fontSize:12,cursor:"pointer",fontFamily:F}}>{pinVis?"Verbergen":"Anzeigen"}</button>
+            </div>
+          </Row>
+        </div>
+        <Card style={{padding:18}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+            <div style={{fontSize:15,fontWeight:600,color:T.label}}>Schüler-Infos</div>
+            <button onClick={()=>editI?saveInfo():setEditI(true)} style={{background:editI?T.green:`${T.gray}18`,color:editI?"#fff":T.label2,border:"none",borderRadius:999,padding:"6px 14px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:F}}>{editI?"✓ Speichern":"✏️ Bearbeiten"}</button>
+          </div>
+          {editI?<div style={{display:"flex",flexDirection:"column",gap:14}}>
+            <div><div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:8}}>Fahrerlaubnisklassen</div><div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{KLASSEN.map(k=>{const sel=(infoF.klassen||[]).includes(k);return <button key={k} onClick={()=>{const c=infoF.klassen||[];setInfoF({...infoF,klassen:sel?c.filter(x=>x!==k):[...c,k]});}} style={{padding:"8px 16px",borderRadius:999,border:`0.5px solid ${sel?T.blue:T.sep}`,background:sel?`${T.blue}18`:"transparent",color:sel?T.blue:T.label2,cursor:"pointer",fontSize:13,fontWeight:600,fontFamily:F}}>{k}</button>;})}</div></div>
+            <div><div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:8}}>Sehhilfe</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>{["Keine","Brille"].map(o=><button key={o} onClick={()=>setInfoF({...infoF,sehhilfe:o})} style={{padding:"10px",borderRadius:12,border:`0.5px solid ${infoF.sehhilfe===o?T.blue:T.sep}`,background:infoF.sehhilfe===o?`${T.blue}18`:"transparent",color:infoF.sehhilfe===o?T.blue:T.label2,cursor:"pointer",fontSize:14,fontFamily:F}}>{o}</button>)}</div></div>
+            <div><div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:8}}>Theorie</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>{[{l:"⏳ Ausstehend",v:false},{l:"✅ Bestanden",v:true}].map(o=><button key={String(o.v)} onClick={()=>setInfoF({...infoF,theorie:o.v})} style={{padding:"10px",borderRadius:12,border:`0.5px solid ${infoF.theorie===o.v?(o.v?T.green:T.red):T.sep}`,background:infoF.theorie===o.v?(o.v?`${T.green}18`:`${T.red}18`):"transparent",color:infoF.theorie===o.v?(o.v?T.green:T.red):T.label2,cursor:"pointer",fontSize:13,fontFamily:F}}>{o.l}</button>)}</div></div>
+          </div>:<div style={{background:T.white,borderRadius:12,overflow:"hidden"}}>
+            <Row><span style={{fontSize:14,color:T.label2}}>Klassen</span><div style={{display:"flex",gap:5,flexWrap:"wrap"}}>{(info?.klassen||[]).length>0?info.klassen.map(k=><span key={k} style={{background:`${T.blue}18`,color:T.blue,borderRadius:999,padding:"3px 10px",fontSize:12,fontWeight:600}}>{k}</span>):<span style={{color:T.label2}}>–</span>}</div></Row>
+            <Row><span style={{fontSize:14,color:T.label2}}>Sehhilfe</span><span style={{fontSize:14,color:T.label}}>{info?.sehhilfe||"–"}</span></Row>
+            <Row last><span style={{fontSize:14,color:T.label2}}>Theorie</span><span style={{fontSize:14,fontWeight:600,color:info?.theorie?T.green:T.orange}}>{info?.theorie?"✅ Bestanden":"⏳ Ausstehend"}</span></Row>
+          </div>}
+        </Card>
+        <Card style={{padding:18}}>
+          <div style={{fontSize:15,fontWeight:600,color:T.label,marginBottom:12}}>📄 ADK Export</div>
+          <button onClick={()=>{
+            const text=`Ausbildungsdiagramm - ${s.name}\nDatum: ${new Date().toLocaleDateString("de-DE")}\n\n`+AUSBILDUNG.map(x=>x.label+"\n"+x.gruppen.map(g=>"  "+g.name+"\n"+g.items.map(i=>{const v=themen[`${x.id}::${g.name}::${i}`]||0;return `    ${v===2?"✅":v===1?"⏳":"○"} ${i}`;}).join("\n")).join("\n")).join("\n\n");
+            const b=new Blob([text],{type:"text/plain;charset=utf-8"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=`ADK_${s.name.replace(/ /g,"_")}.txt`;a.click();URL.revokeObjectURL(u);
+          }} style={{width:"100%",background:T.blue,color:"#fff",border:"none",borderRadius:14,padding:"13px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:F,boxShadow:`0 4px 16px ${T.blue}44`}}>📄 Herunterladen</button>
+        </Card>
+      </div>}
+    </div>
+  );
+}
+
+// ── MATERIAL LISTE ──────────────────────────────────
+function MatListe({mat,onOpen}) {
+  return (
+    <div style={{background:T.bg,minHeight:"100vh",padding:"20px 16px 0"}}>
+      <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,marginBottom:4,fontFamily:F}}>Material</div>
+      <div style={{fontSize:14,color:T.label2,marginBottom:20,fontFamily:F}}>Lernmaterial für alle Bereiche</div>
+      <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:24}}>
+        {AUSBILDUNG.map(s=>(
+          <div key={s.id} style={{background:T.white,borderRadius:16,overflow:"hidden",boxShadow:T.s1,borderLeft:`3px solid ${s.color}`}}>
+            <div style={{padding:"13px 16px",display:"flex",alignItems:"center",gap:10,borderBottom:`0.5px solid ${T.sep}`}}>
+              <span style={{fontSize:22}}>{s.icon}</span>
+              <div style={{flex:1}}><div style={{fontSize:15,fontWeight:600,color:T.label,fontFamily:F}}>{s.label}</div><div style={{fontSize:12,color:T.label2,fontFamily:F}}>{s.gruppen.flatMap(g=>g.items).length} Punkte</div></div>
+            </div>
+            {s.gruppen.map((g,gi)=>{
+              const mk=`${s.id}::${g.name}`;
+              const hm=mat&&mat[mk]&&(mat[mk].videoUrl||mat[mk].fotos?.length>0||mat[mk].quiz?.length>0||mat[mk].pdfUrl);
+              return <Row key={g.name} last={gi===s.gruppen.length-1} onClick={()=>onOpen(mk)}>
+                <div style={{flex:1}}><div style={{fontSize:14,fontWeight:500,color:T.label,fontFamily:F}}>{g.name}</div><div style={{fontSize:12,color:T.label2,fontFamily:F}}>{g.items.length} Punkte</div></div>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  {hm&&<span style={{fontSize:11,background:`${T.blue}18`,color:T.blue,borderRadius:999,padding:"3px 9px",fontWeight:600}}>Material</span>}
+                  <span style={{color:T.label3,fontSize:20}}>›</span>
+                </div>
+              </Row>;
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── MAT VIEW ────────────────────────────────────────
+function MatView({ik,mat,setMat,isLehrer}) {
+  const name=ik.split("::")[1]||ik;
+  const [m,setM]=useState({videoUrl:"",fotos:[],quiz:[],pdfUrl:"",pdfName:""});
+  const [vInp,setVInp]=useState(""); const [fInp,setFInp]=useState("");
+  const [sav,setSav]=useState(false); const [quizSt,setQuizSt]=useState(null);
+  const [editQ,setEditQ]=useState(false); const [editQId,setEditQId]=useState(null);
+  const [qF,setQF]=useState({frage:"",typ:"mc",antworten:["","","",""],richtig:0,erklaerung:"",bildUrl:""});
+  const [fsIdx,setFsIdx]=useState(null);
+
+  useEffect(()=>{
+    const l=async()=>{
+      const[mr,qr]=await Promise.all([supabase.from("lernmaterial").select("*").eq("item_key",ik).single(),supabase.from("quiz_fragen").select("*").eq("item_key",ik)]);
+      const loaded={videoUrl:mr.data?.video_url||"",fotos:mr.data?.fotos||[],pdfUrl:mr.data?.pdf_url||"",pdfName:mr.data?.pdf_name||"",quiz:(qr.data||[]).map(q=>({id:q.id,frage:q.frage,typ:q.typ,antworten:q.antworten||[],richtig:q.richtig,erklaerung:q.erklaerung||"",bildUrl:q.bild_url||""}))};
+      setM(loaded);setVInp(loaded.videoUrl||"");
+    };l();
+  },[ik]);
+
+  const em=u=>{const x=u.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/);return x?`https://www.youtube.com/embed/${x[1]}`:u;};
+  const save=async u=>{
+    const mg={...m,...u};setM(mg);if(setMat)setMat(p=>({...p,[ik]:mg}));
+    setSav(true);
+    await supabase.from("lernmaterial").upsert({item_key:ik,video_url:mg.videoUrl||"",fotos:mg.fotos||[],pdf_url:mg.pdfUrl||"",pdf_name:mg.pdfName||"",aktualisiert_am:new Date().toISOString()},{onConflict:"item_key"});
+    if(u.quiz!==undefined){await supabase.from("quiz_fragen").delete().eq("item_key",ik);if(mg.quiz?.length>0)await supabase.from("quiz_fragen").insert(mg.quiz.map(q=>({item_key:ik,frage:q.frage,typ:q.typ,antworten:q.antworten||[],richtig:typeof q.richtig==="boolean"?(q.richtig?1:0):q.richtig,erklaerung:q.erklaerung||"",bild_url:q.bildUrl||""})));}
+    setSav(false);
+  };
+  const upload=async(file,pre)=>{const n=`${pre}_${Date.now()}.${file.name.split(".").pop()||"bin"}`;for(const b of["Lernmaterial","lernmaterial"]){const{error}=await supabase.storage.from(b).upload(n,file,{upsert:true,contentType:file.type});if(!error){const{data:u}=supabase.storage.from(b).getPublicUrl(n);return u.publicUrl;}}return null;};
+
+  if(quizSt) return <QuizView quiz={m.quiz} st={quizSt} setSt={setQuizSt} onBack={()=>setQuizSt(null)}/>;
+
+  return (
+    <div style={{padding:"16px 16px 24px",fontFamily:F}}>
+      <div style={{display:"flex",justifyContent:"flex-end",marginBottom:14,minHeight:20}}>
+        {sav&&<span style={{fontSize:12,color:T.orange,fontWeight:600}}>⏳ Speichern...</span>}
+        {!sav&&isLehrer&&<span style={{fontSize:12,color:T.green,fontWeight:600}}>✓ Gespeichert</span>}
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+
+        {/* PDF */}
+        <Card style={{padding:18}}>
+          <div style={{fontSize:15,fontWeight:600,color:T.label,marginBottom:14}}>📄 Dokument</div>
+          {isLehrer&&<label style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:T.bg,border:`0.5px solid ${T.sep}`,borderRadius:12,padding:"11px",cursor:"pointer",fontSize:14,color:T.label2,marginBottom:12}}>📄 PDF hochladen<input type="file" accept=".pdf,.doc,.docx" style={{display:"none"}} onChange={async e=>{const f=e.target.files[0];if(!f)return;setSav(true);const u=await upload(f,"doc");if(u)await save({pdfUrl:u,pdfName:f.name});setSav(false);}}/></label>}
+          {m.pdfUrl?<a href={m.pdfUrl} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:12,padding:"14px",background:T.bg,borderRadius:12,textDecoration:"none",color:T.label,border:`0.5px solid ${T.sep}`}}><span style={{fontSize:32}}>📄</span><div style={{flex:1}}><div style={{fontSize:14,fontWeight:600}}>{m.pdfName||"Dokument"}</div><div style={{fontSize:12,color:T.label2}}>Tippen zum Öffnen</div></div><span style={{color:T.blue,fontSize:20}}>↗</span></a>:<div style={{textAlign:"center",padding:20,color:T.label2,background:T.bg,borderRadius:12,fontSize:14}}>{isLehrer?"Noch kein Dokument":"Kein Dokument"}</div>}
+          {isLehrer&&m.pdfUrl&&<button onClick={()=>save({pdfUrl:"",pdfName:""})} style={{marginTop:10,background:`${T.red}15`,color:T.red,border:"none",borderRadius:10,padding:"8px",width:"100%",cursor:"pointer",fontSize:13,fontFamily:F}}>Entfernen</button>}
+        </Card>
+
+        {/* Video */}
+        <Card style={{padding:18}}>
+          <div style={{fontSize:15,fontWeight:600,color:T.label,marginBottom:14}}>📹 Video</div>
+          {isLehrer&&<div style={{display:"flex",gap:8,marginBottom:12}}><input style={{flex:1,background:T.bg,border:`0.5px solid ${T.sep}`,borderRadius:12,padding:"10px 14px",fontSize:14,color:T.label,outline:"none",fontFamily:F}} placeholder="YouTube Link..." value={vInp} onChange={e=>setVInp(e.target.value)}/><button onClick={async()=>await save({videoUrl:em(vInp)})} style={{background:T.blue,color:"#fff",border:"none",borderRadius:12,padding:"10px 16px",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:F}}>OK</button></div>}
+          {m.videoUrl?<div style={{position:"relative",paddingBottom:"56.25%",height:0,borderRadius:12,overflow:"hidden"}}><iframe src={m.videoUrl} style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",border:"none"}} allowFullScreen title="Video"/></div>:<div style={{textAlign:"center",padding:32,color:T.label2,background:T.bg,borderRadius:12,fontSize:14}}>{isLehrer?"YouTube Link einfügen":"Noch kein Video"}</div>}
+        </Card>
+
+        {/* Fotos */}
+        <Card style={{padding:18}}>
+          <div style={{fontSize:15,fontWeight:600,color:T.label,marginBottom:14}}>🖼 Fotos</div>
+          {isLehrer&&<div style={{marginBottom:12}}>
+            <label style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:T.green,color:"#fff",borderRadius:12,padding:"11px",cursor:"pointer",fontSize:14,fontWeight:600,marginBottom:8,boxShadow:`0 4px 16px ${T.green}44`}}>📷 Foto hochladen<input type="file" accept="image/*" style={{display:"none"}} onChange={async e=>{const f=e.target.files[0];if(!f)return;setSav(true);const u=await upload(f,"foto");if(u)await save({fotos:[...(m.fotos||[]),u]});setSav(false);}}/></label>
+            <div style={{display:"flex",gap:8}}><input style={{flex:1,background:T.bg,border:`0.5px solid ${T.sep}`,borderRadius:12,padding:"10px 14px",fontSize:14,color:T.label,outline:"none",fontFamily:F}} placeholder="https://...jpg" value={fInp} onChange={e=>setFInp(e.target.value)}/><button onClick={async()=>{if(!fInp.trim())return;await save({fotos:[...(m.fotos||[]),fInp.trim()]});setFInp("");}} style={{background:T.bg,border:`0.5px solid ${T.sep}`,borderRadius:12,padding:"10px 16px",fontSize:14,color:T.label2,cursor:"pointer",fontFamily:F}}>+</button></div>
+          </div>}
+          {(m.fotos||[]).length===0?<div style={{textAlign:"center",padding:24,color:T.label2,background:T.bg,borderRadius:12,fontSize:14}}>{isLehrer?"Noch keine Fotos":"Keine Fotos"}</div>:
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              {(m.fotos||[]).map((u,i)=>(
+                <div key={i} style={{position:"relative",borderRadius:14,overflow:"hidden",aspectRatio:"1/1",border:`0.5px solid ${T.sep}`}}>
+                  <img src={u} alt="" onClick={()=>setFsIdx(i)} style={{width:"100%",height:"100%",objectFit:"cover",cursor:"pointer"}} onError={e=>{e.target.style.display="none";}}/>
+                  {isLehrer&&<button onClick={async()=>save({fotos:(m.fotos||[]).filter((_,j)=>j!==i)})} style={{position:"absolute",top:6,right:6,background:"rgba(0,0,0,0.5)",backdropFilter:"blur(8px)",border:"none",borderRadius:8,color:"#fff",padding:"4px 8px",cursor:"pointer",fontSize:13}}>🗑</button>}
+                  <button onClick={()=>setFsIdx(i)} style={{position:"absolute",bottom:6,right:6,background:"rgba(0,0,0,0.5)",backdropFilter:"blur(8px)",border:"none",borderRadius:8,color:"#fff",padding:"3px 8px",fontSize:11,cursor:"pointer"}}>🔍</button>
+                </div>
+              ))}
+            </div>}
+          {fsIdx!==null&&(m.fotos||[]).length>0&&<FullScreen fotos={m.fotos||[]} start={fsIdx} onClose={()=>setFsIdx(null)}/>}
+        </Card>
+
+        {/* Quiz */}
+        <Card style={{padding:18}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+            <div style={{fontSize:15,fontWeight:600,color:T.label}}>❓ Quiz ({(m.quiz||[]).length} Fragen)</div>
+            <div style={{display:"flex",gap:8}}>
+              {(m.quiz||[]).length>0&&<button onClick={()=>setQuizSt({index:0,answers:{},submitted:false,score:0})} style={{background:T.green,color:"#fff",border:"none",borderRadius:999,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:F,boxShadow:`0 2px 10px ${T.green}44`}}>▶ Start</button>}
+              {isLehrer&&<button onClick={()=>{setEditQ(!editQ);setEditQId(null);setQF({frage:"",typ:"mc",antworten:["","","",""],richtig:0,erklaerung:"",bildUrl:""});}} style={{background:`${T.gray}15`,color:T.label2,border:"none",borderRadius:999,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:F}}>{editQ?"Abbrechen":"+ Frage"}</button>}
+            </div>
+          </div>
+          {editQ&&isLehrer&&<div style={{background:T.bg,borderRadius:14,padding:16,marginBottom:14,border:`0.5px solid ${T.sep}`}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>{[{v:"mc",l:"Multiple Choice"},{v:"wf",l:"Wahr/Falsch"}].map(t=><button key={t.v} onClick={()=>setQF({...qF,typ:t.v})} style={{padding:"9px",borderRadius:12,border:`0.5px solid ${qF.typ===t.v?T.blue:T.sep}`,background:qF.typ===t.v?`${T.blue}18`:"#fff",color:qF.typ===t.v?T.blue:T.label2,cursor:"pointer",fontSize:13,fontWeight:500,fontFamily:F}}>{t.l}</button>)}</div>
+            <input style={{width:"100%",boxSizing:"border-box",background:"#fff",border:`0.5px solid ${T.sep}`,borderRadius:12,padding:"10px 14px",fontSize:14,color:T.label,outline:"none",fontFamily:F,marginBottom:10}} value={qF.frage} onChange={e=>setQF({...qF,frage:e.target.value})} placeholder="Frage *"/>
+            <label style={{display:"flex",alignItems:"center",gap:8,background:"#fff",border:`0.5px solid ${T.sep}`,borderRadius:12,padding:"10px 14px",cursor:"pointer",fontSize:13,color:T.label2,marginBottom:10}}>📷 Bild zur Frage<input type="file" accept="image/*" style={{display:"none"}} onChange={async e=>{const f=e.target.files[0];if(!f)return;setSav(true);const u=await upload(f,"quiz");if(u)setQF(p=>({...p,bildUrl:u}));setSav(false);}}/></label>
+            {qF.bildUrl&&<img src={qF.bildUrl} alt="" style={{height:60,borderRadius:8,objectFit:"cover",marginBottom:10}}/>}
+            {qF.typ==="mc"&&<>{qF.antworten.map((a,i)=><input key={i} style={{width:"100%",boxSizing:"border-box",background:"#fff",border:`0.5px solid ${T.sep}`,borderRadius:12,padding:"10px 14px",fontSize:14,color:T.label,outline:"none",fontFamily:F,marginBottom:6}} placeholder={`Antwort ${i+1}`} value={a} onChange={e=>{const n=[...qF.antworten];n[i]=e.target.value;setQF({...qF,antworten:n});}}/>)}<select style={{width:"100%",background:"#fff",border:`0.5px solid ${T.sep}`,borderRadius:12,padding:"10px 14px",fontSize:14,color:T.label,outline:"none",fontFamily:F,marginBottom:10}} value={qF.richtig} onChange={e=>setQF({...qF,richtig:parseInt(e.target.value)})}>{qF.antworten.map((a,i)=><option key={i} value={i}>{i+1}. {a||`Antwort ${i+1}`}</option>)}</select></>}
+            {qF.typ==="wf"&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>{[{v:true,l:"✓ Wahr"},{v:false,l:"✗ Falsch"}].map(o=><button key={String(o.v)} onClick={()=>setQF({...qF,richtig:o.v})} style={{padding:"10px",borderRadius:12,border:`0.5px solid ${qF.richtig===o.v?T.green:T.sep}`,background:qF.richtig===o.v?`${T.green}18`:"#fff",color:qF.richtig===o.v?T.green:T.label2,cursor:"pointer",fontSize:14,fontFamily:F}}>{o.l}</button>)}</div>}
+            <input style={{width:"100%",boxSizing:"border-box",background:"#fff",border:`0.5px solid ${T.sep}`,borderRadius:12,padding:"10px 14px",fontSize:14,color:T.label,outline:"none",fontFamily:F,marginBottom:12}} value={qF.erklaerung} onChange={e=>setQF({...qF,erklaerung:e.target.value})} placeholder="Erklärung (optional)"/>
+            <button onClick={async()=>{
+              if(!qF.frage.trim())return;
+              if(editQId){await save({quiz:(m.quiz||[]).map(q=>q.id===editQId?{...q,...qF,antworten:qF.antworten.filter(a=>a.trim())}:q)});}
+              else{const q={id:"q"+Date.now(),...qF,antworten:qF.antworten.filter(a=>a.trim())};await save({quiz:[...(m.quiz||[]),q]});}
+              setQF({frage:"",typ:"mc",antworten:["","","",""],richtig:0,erklaerung:"",bildUrl:""});setEditQ(false);setEditQId(null);
+            }} style={{width:"100%",background:T.blue,color:"#fff",border:"none",borderRadius:14,padding:"13px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:F}}>{editQId?"✓ Änderungen speichern":"Frage speichern"}</button>
+          </div>}
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {(m.quiz||[]).length===0&&!editQ&&<div style={{textAlign:"center",padding:24,color:T.label2,background:T.bg,borderRadius:12,fontSize:14}}>{isLehrer?"Klicke "+ Frage"":"Noch keine Fragen"}</div>}
+            {(m.quiz||[]).map(q=><div key={q.id} style={{background:T.bg,borderRadius:12,padding:"11px 14px",display:"flex",alignItems:"center",gap:8,border:`0.5px solid ${T.sep}`}}>
+              <span style={{fontSize:11,background:q.typ==="mc"?`${T.blue}18`:`${T.green}18`,color:q.typ==="mc"?T.blue:T.green,borderRadius:999,padding:"3px 9px",fontWeight:600,flexShrink:0}}>{q.typ==="mc"?"MC":"W/F"}</span>
+              <span style={{fontSize:13,flex:1,color:T.label}}>{q.frage}</span>
+              {isLehrer&&<><button onClick={()=>{setEditQId(q.id);setQF({frage:q.frage,typ:q.typ,antworten:q.antworten?.length>=4?q.antworten:[...q.antworten||[],...Array(4).fill("")].slice(0,4),richtig:q.richtig,erklaerung:q.erklaerung||"",bildUrl:q.bildUrl||""});setEditQ(true);}} style={{background:"none",border:"none",cursor:"pointer",color:T.blue,fontSize:15}}>✏️</button><button onClick={async()=>save({quiz:(m.quiz||[]).filter(x=>x.id!==q.id)})} style={{background:"none",border:"none",cursor:"pointer",color:T.label2,fontSize:16}}>🗑</button></>}
+            </div>)}
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// ── FULLSCREEN ──────────────────────────────────────
+function FullScreen({fotos,start,onClose}) {
+  const [i,setI]=useState(start); const [tx,setTx]=useState(null);
+  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.97)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center"}} onTouchStart={e=>setTx(e.touches[0].clientX)} onTouchEnd={e=>{if(tx===null)return;const d=tx-e.changedTouches[0].clientX;if(d>50)setI(x=>(x+1)%fotos.length);else if(d<-50)setI(x=>(x-1+fotos.length)%fotos.length);setTx(null);}}>
+    <div style={{position:"relative",width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <img src={fotos[i]} alt="" style={{maxWidth:"100%",maxHeight:"90vh",objectFit:"contain",borderRadius:12}}/>
+      <button onClick={onClose} style={{position:"absolute",top:20,right:20,background:"rgba(255,255,255,0.12)",backdropFilter:"blur(10px)",border:"none",borderRadius:"50%",width:44,height:44,color:"#fff",fontSize:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+      {fotos.length>1&&<>
+        <div style={{position:"absolute",top:20,left:"50%",transform:"translateX(-50%)",background:"rgba(0,0,0,0.5)",backdropFilter:"blur(8px)",borderRadius:999,padding:"4px 14px",fontSize:13,color:"#fff",fontWeight:600}}>{i+1} / {fotos.length}</div>
+        <button onClick={()=>setI(x=>(x-1+fotos.length)%fotos.length)} style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",background:"rgba(255,255,255,0.12)",backdropFilter:"blur(10px)",border:"none",borderRadius:"50%",width:48,height:48,color:"#fff",fontSize:28,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>‹</button>
+        <button onClick={()=>setI(x=>(x+1)%fotos.length)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"rgba(255,255,255,0.12)",backdropFilter:"blur(10px)",border:"none",borderRadius:"50%",width:48,height:48,color:"#fff",fontSize:28,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>›</button>
+        <div style={{position:"absolute",bottom:28,left:"50%",transform:"translateX(-50%)",display:"flex",gap:6}}>{fotos.map((_,j)=><div key={j} onClick={()=>setI(j)} style={{width:j===i?20:7,height:7,borderRadius:99,background:j===i?"#fff":"rgba(255,255,255,0.3)",cursor:"pointer",transition:"all .2s"}}/>)}</div>
+      </>}
+    </div>
+  </div>;
+}
+
+// ── QUIZ VIEW ───────────────────────────────────────
+function QuizView({quiz,st,setSt,onBack}) {
+  const{index,answers,submitted,score}=st;
+  const submit=()=>{let sc=0;quiz.forEach(q=>{if(answers[q.id]===q.richtig)sc++;});setSt({...st,submitted:true,score:sc});};
+  if(submitted){
+    const pct=Math.round((score/quiz.length)*100);
+    return <div style={{padding:"0 16px 24px",fontFamily:F}}>
+      <div style={{textAlign:"center",padding:"36px 0 24px"}}><div style={{fontSize:56,marginBottom:12}}>{pct>=70?"🎉":"📚"}</div><div style={{fontSize:28,fontWeight:700,color:T.label,marginBottom:4}}>{pct>=70?"Super!":"Weiter üben!"}</div><div style={{fontSize:42,fontWeight:700,color:pct>=70?T.green:T.red}}>{pct}%</div><div style={{color:T.label2,marginTop:6}}>{score} von {quiz.length} richtig</div></div>
+      <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>{quiz.map((q,j)=>{const ok=answers[q.id]===q.richtig;return <Card key={q.id} style={{padding:16,borderLeft:`3px solid ${ok?T.green:T.red}`}}>{q.bildUrl&&<img src={q.bildUrl} alt="" style={{width:"100%",maxHeight:130,objectFit:"contain",borderRadius:10,marginBottom:10,background:T.bg}}/>}<div style={{fontWeight:600,color:T.label,marginBottom:6}}>#{j+1} {q.frage}</div><div style={{fontSize:13,color:T.label}}>{ok?"✅":"❌"} {q.typ==="mc"?(q.antworten[answers[q.id]]||"–"):(answers[q.id]===true?"Wahr":answers[q.id]===false?"Falsch":"–")}{!ok&&<span style={{color:T.green}}> · Richtig: {q.typ==="mc"?q.antworten[q.richtig]:(q.richtig?"Wahr":"Falsch")}</span>}</div>{q.erklaerung&&<div style={{marginTop:6,fontSize:12,color:T.label2,fontStyle:"italic"}}>💡 {q.erklaerung}</div>}</Card>;})}
+      </div>
+      <button onClick={onBack} style={{width:"100%",background:T.blue,color:"#fff",border:"none",borderRadius:14,padding:"14px",fontSize:16,fontWeight:600,cursor:"pointer",fontFamily:F}}>← Zurück</button>
+    </div>;
+  }
+  const q=quiz[index];
+  return <div style={{padding:"0 16px 24px",fontFamily:F}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}><button onClick={onBack} style={{background:T.bg,border:`0.5px solid ${T.sep}`,borderRadius:999,padding:"8px 16px",fontSize:13,color:T.label2,cursor:"pointer",fontFamily:F}}>← Abbrechen</button><span style={{fontSize:14,color:T.label2}}>Frage {index+1} / {quiz.length}</span></div>
+    <div style={{background:T.sep,borderRadius:99,height:5,marginBottom:20}}><div style={{background:T.blue,height:5,borderRadius:99,width:`${((index+1)/quiz.length)*100}%`,transition:"width .3s"}}/></div>
+    <Card style={{padding:20,marginBottom:14}}>
+      {q.bildUrl&&<img src={q.bildUrl} alt="" style={{width:"100%",maxHeight:200,objectFit:"contain",borderRadius:12,marginBottom:14,background:T.bg}}/>}
+      <div style={{fontSize:18,fontWeight:600,color:T.label,marginBottom:20,lineHeight:1.4}}>{q.frage}</div>
+      {q.typ==="mc"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>{q.antworten.map((a,j)=><button key={j} onClick={()=>setSt({...st,answers:{...answers,[q.id]:j}})} style={{background:answers[q.id]===j?T.blue:T.bg,color:answers[q.id]===j?"#fff":T.label,border:`0.5px solid ${answers[q.id]===j?T.blue:T.sep}`,borderRadius:14,padding:"13px 16px",cursor:"pointer",textAlign:"left",fontSize:15,fontWeight:answers[q.id]===j?600:400,fontFamily:F,transition:"all .15s"}}>{a}</button>)}</div>}
+      {q.typ==="wf"&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>{[{v:true,l:"✓ Wahr"},{v:false,l:"✗ Falsch"}].map(o=><button key={String(o.v)} onClick={()=>setSt({...st,answers:{...answers,[q.id]:o.v}})} style={{background:answers[q.id]===o.v?T.blue:T.bg,color:answers[q.id]===o.v?"#fff":T.label,border:`0.5px solid ${answers[q.id]===o.v?T.blue:T.sep}`,borderRadius:14,padding:"14px",cursor:"pointer",fontSize:16,fontWeight:600,fontFamily:F}}>{o.l}</button>)}</div>}
+    </Card>
+    <div style={{display:"flex",gap:12}}>
+      {index>0&&<button onClick={()=>setSt({...st,index:index-1})} style={{flex:1,background:T.bg,border:`0.5px solid ${T.sep}`,borderRadius:14,padding:"13px",fontSize:15,fontWeight:500,cursor:"pointer",color:T.label,fontFamily:F}}>← Zurück</button>}
+      {index<quiz.length-1?<button onClick={()=>setSt({...st,index:index+1})} style={{background:T.blue,color:"#fff",border:"none",borderRadius:14,padding:"13px",fontSize:15,fontWeight:600,cursor:"pointer",flex:1,fontFamily:F}}>Weiter →</button>:<button onClick={submit} style={{background:T.green,color:"#fff",border:"none",borderRadius:14,padding:"13px",fontSize:15,fontWeight:600,cursor:"pointer",flex:1,fontFamily:F,boxShadow:`0 4px 16px ${T.green}44`}}>Abgeben ✓</button>}
+    </div>
+  </div>;
+}
+
+// ── PROFIL ──────────────────────────────────────────
+function Profil({onLogout,isLehrer}) {
+  return (
+    <div style={{background:T.bg,minHeight:"100vh",padding:"20px 16px 0",fontFamily:F}}>
+      <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,marginBottom:16}}>{isLehrer?"Mein Profil":"Fahrlehrer"}</div>
+      <div style={{background:`linear-gradient(135deg,${T.red},#c1121f)`,borderRadius:24,padding:"22px 20px",display:"flex",alignItems:"center",gap:16,marginBottom:14,boxShadow:`0 10px 36px ${T.red}44`}}>
+        <div style={{width:76,height:76,borderRadius:"50%",background:"rgba(255,255,255,0.18)",backdropFilter:"blur(10px)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:36,flexShrink:0,border:"2px solid rgba(255,255,255,0.3)"}}>👨‍🏫</div>
+        <div>
+          <div style={{fontSize:23,fontWeight:700,color:"#fff"}}>Fahrlehrer Saad</div>
+          <div style={{fontSize:13,color:"rgba(255,255,255,0.75)",marginTop:3}}>📍 Münster, NRW</div>
+          <div style={{display:"flex",gap:6,marginTop:10,flexWrap:"wrap"}}>
+            {["Klasse B","BE","10+ Jahre"].map((t,i)=><div key={i} style={{background:"rgba(255,255,255,0.18)",backdropFilter:"blur(8px)",borderRadius:999,padding:"4px 12px",fontSize:12,color:"#fff",fontWeight:500,border:"0.5px solid rgba(255,255,255,0.3)"}}>{t}</div>)}
+          </div>
+        </div>
+      </div>
+      <div style={{fontSize:11,fontWeight:700,color:T.label2,letterSpacing:0.8,textTransform:"uppercase",marginBottom:8,paddingLeft:4}}>Über mich</div>
+      <Card style={{padding:18,marginBottom:14}}>
+        <div style={{fontSize:15,color:T.label,lineHeight:1.65}}>Als leidenschaftlicher Fahrlehrer in Münster helfe ich meinen Schülern, sicher und selbstbewusst ans Steuer zu kommen.</div>
+      </Card>
+      <div style={{fontSize:11,fontWeight:700,color:T.label2,letterSpacing:0.8,textTransform:"uppercase",marginBottom:8,paddingLeft:4}}>Social Media & Kontakt</div>
+      <div style={{background:T.white,borderRadius:16,overflow:"hidden",boxShadow:T.s1,marginBottom:14}}>
+        {[{icon:"📸",l:"Instagram",h:"@fahrlehrersaad",c:"#E1306C"},{icon:"🎵",l:"TikTok",h:"@fahrlehrersaad",c:"#000"},{icon:"▶️",l:"YouTube",h:"Fahrlehrer Saad",c:"#FF0000"},{icon:"💬",l:"WhatsApp",h:"Direkt schreiben",c:"#25D366"}].map((s,i,a)=>(
+          <Row key={i} last={i===a.length-1}>
+            <div style={{width:38,height:38,borderRadius:10,background:s.c,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,marginRight:14}}>{s.icon}</div>
+            <div style={{flex:1}}><div style={{fontSize:15,fontWeight:500,color:T.label}}>{s.l}</div><div style={{fontSize:13,color:T.label2}}>{s.h}</div></div>
+            <span style={{color:T.label3,fontSize:22}}>›</span>
+          </Row>
+        ))}
+      </div>
+      <button onClick={onLogout} style={{width:"100%",background:"rgba(255,255,255,0.85)",backdropFilter:"blur(20px)",border:`0.5px solid ${T.sep}`,borderRadius:14,padding:"14px",fontSize:16,fontWeight:500,cursor:"pointer",color:T.red,fontFamily:F,marginBottom:24,boxShadow:T.s1}}>Abmelden</button>
+    </div>
+  );
+}
+
+// ── SCHÜLER APP ─────────────────────────────────────
+function SchuelerApp({schueler,onLogout}) {
+  const [tab,setTab]=useState("home");
+  const [themen,setThemen]=useState({}); const [naechstes,setNaechstes]=useState({});
+  const [notizen,setNotizen]=useState([]); const [info,setInfo]=useState(null);
+  const [mat,setMat]=useState({}); const [screen,setScreen]=useState(null);
+  const [selStufe,setSelStufe]=useState(null); const [load,setLoad]=useState(true);
+
+  useEffect(()=>{
+    const l=async()=>{
+      setLoad(true);
+      const[t,n,i,m,q]=await Promise.all([
+        supabase.from("ausbildungsstand").select("*").eq("schueler_id",schueler.id),
+        supabase.from("notizen").select("*").eq("schueler_id",schueler.id).order("erstellt_am",{ascending:false}),
+        supabase.from("schueler_info").select("*").eq("schueler_id",schueler.id).single(),
+        supabase.from("lernmaterial").select("*"),
+        supabase.from("quiz_fragen").select("*"),
+      ]);
+      const tm={},nm={};
+      (t.data||[]).forEach(x=>{tm[x.item_key]=Number(x.wert);if(x.naechstes)nm[x.item_key]=true;});
+      setThemen(tm);setNaechstes(nm);setNotizen(n.data||[]);setInfo(i.data);
+      const mm={};
+      (m.data||[]).forEach(x=>{mm[x.item_key]={videoUrl:x.video_url||"",fotos:x.fotos||[],quiz:[],pdfUrl:x.pdf_url||"",pdfName:x.pdf_name||""};});
+      (q.data||[]).forEach(x=>{if(!mm[x.item_key])mm[x.item_key]={videoUrl:"",fotos:[],quiz:[],pdfUrl:"",pdfName:""};mm[x.item_key].quiz.push({id:x.id,frage:x.frage,typ:x.typ,antworten:x.antworten||[],richtig:x.richtig,erklaerung:x.erklaerung||"",bildUrl:x.bild_url||""});});
+      setMat(mm);setLoad(false);
+    };l();
+  },[schueler.id]);
+
+  const pct=Math.round((Object.values(themen).filter(v=>v===2).length/ALL.length)*100);
+
+  if(screen?.type==="mat") return <div style={{fontFamily:F,background:T.bg,minHeight:"100vh"}}><NavBar title={screen.k.split("::")[1]||"Material"} onBack={()=>setScreen(null)}/><div style={{paddingBottom:20}}><MatView ik={screen.k} mat={mat} setMat={setMat} isLehrer={false}/></div></div>;
+
+  const renderTab=()=>{
+    if(load) return <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:100}}><span style={{fontSize:40}}>⏳</span></div>;
+
+    if(tab==="home") return (
+      <div style={{background:T.bg,minHeight:"100vh",padding:"20px 16px 0",fontFamily:F}}>
+        <div style={{marginBottom:20}}>
+          <div style={{fontSize:11,color:T.red,fontWeight:700,letterSpacing:1}}>FAHRLEHRER SAAD</div>
+          <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,fontFamily:F}}>Hallo, {schueler.name.split(" ")[0]}! 👋</div>
+        </div>
+        <Card style={{padding:20,marginBottom:14}}>
+          <div style={{fontSize:11,fontWeight:700,color:T.label2,letterSpacing:0.8,textTransform:"uppercase",marginBottom:12}}>Mein Fortschritt</div>
+          <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:16}}>
+            <Ring pct={pct} size={84}/>
+            <div style={{flex:1}}><div style={{fontSize:24,fontWeight:700,color:T.label,fontFamily:F}}>{pct}% erreicht</div><div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:6}}>{(info?.klassen||[]).map(k=><span key={k} style={{background:`${T.blue}18`,color:T.blue,borderRadius:999,padding:"3px 10px",fontSize:12,fontWeight:600}}>{k}</span>)}</div></div>
+          </div>
+          <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:4,marginBottom:14}}>
+            {AUSBILDUNG.map(s=>{const ks=s.gruppen.flatMap(g=>g.items.map(i=>`${s.id}::${g.name}::${i}`));const sp=Math.round((ks.filter(k=>(themen[k]||0)===2).length/ks.length)*100);return <div key={s.id} onClick={()=>{setSelStufe(s.id);setTab("diagramm");}} style={{background:sp>0?`${s.color}15`:"rgba(255,255,255,0.5)",border:`0.5px solid ${sp>0?s.color+"40":T.sep}`,borderRadius:12,padding:"8px 12px",flexShrink:0,textAlign:"center",minWidth:66,cursor:"pointer"}}><div style={{fontSize:18}}>{s.icon}</div><div style={{fontSize:10,color:sp>0?s.color:T.label2,fontWeight:600,marginTop:2,fontFamily:F}}>{s.label}</div><div style={{fontSize:12,fontWeight:700,color:sp>0?s.color:T.label3,fontFamily:F}}>{sp}%</div></div>;})}
+          </div>
+          <button onClick={()=>setTab("diagramm")} style={{width:"100%",background:T.red,color:"#fff",border:"none",borderRadius:14,padding:"13px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:F,boxShadow:`0 6px 20px ${T.red}44`}}>Alle Stufen & Lernmaterial →</button>
+        </Card>
+
+        {Object.keys(naechstes).length>0&&<div style={{background:`${T.blue}10`,border:`0.5px solid ${T.blue}30`,borderRadius:20,padding:16,marginBottom:14}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}><span style={{fontSize:18}}>📍</span><div style={{fontSize:15,fontWeight:700,color:T.blue,fontFamily:F}}>Als nächstes geplant</div><span style={{background:`${T.blue}18`,color:T.blue,borderRadius:999,padding:"2px 8px",fontSize:11,fontWeight:700,marginLeft:"auto"}}>{Object.keys(naechstes).length}</span></div>
+          {Object.keys(naechstes).map(k=>{const p=k.split("::");const so=AUSBILDUNG.find(x=>x.id===p[0]);const mk=`${p[0]}::${p[1]}`;const hm=mat&&mat[mk]&&(mat[mk].videoUrl||mat[mk].fotos?.length>0||mat[mk].quiz?.length>0);return <Card key={k} style={{padding:"12px 14px",marginBottom:8}}><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:hm?10:0}}><span style={{fontSize:20}}>{so?.icon||"📍"}</span><div style={{flex:1}}><div style={{fontSize:14,fontWeight:600,color:T.label,fontFamily:F}}>{p[2]}</div><div style={{fontSize:12,color:T.label2,fontFamily:F}}>{so?.label} · {p[1]}</div></div></div>{hm&&<button onClick={()=>setScreen({type:"mat",k:mk})} style={{width:"100%",background:`${T.blue}15`,color:T.blue,border:`0.5px solid ${T.blue}30`,borderRadius:12,padding:"9px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:F}}>📚 Lernmaterial ansehen</button>}</Card>;})}
+        </div>}
+
+        {notizen.length>0&&<Card style={{padding:16,marginBottom:14,borderLeft:`3px solid ${T.blue}`}}><div style={{fontSize:11,fontWeight:700,color:T.label2,letterSpacing:0.8,textTransform:"uppercase",marginBottom:8}}>Letzte Notiz</div><div style={{fontSize:14,color:T.label,lineHeight:1.6}}>{notizen[0].text}</div></Card>}
+
+        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:24}}>
+          {[{e:"🏆",t:"Prüfungsreife",d:"Bald verfügbar"},{e:"📖",t:"Theorie",d:"14 Lektionen"}].map((x,i)=><Card key={i} style={{padding:14,opacity:0.55}}><div style={{display:"flex",alignItems:"center",gap:12,justifyContent:"space-between"}}><div style={{display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:26}}>{x.e}</span><div><div style={{fontSize:15,fontWeight:600,color:T.label,fontFamily:F}}>{x.t}</div><div style={{fontSize:12,color:T.label2,fontFamily:F}}>{x.d}</div></div></div><div style={{background:`${T.purple}18`,color:T.purple,borderRadius:999,padding:"3px 10px",fontSize:11,fontWeight:700}}>Bald</div></div></Card>)}
+        </div>
+      </div>
+    );
+
+    if(tab==="diagramm") return (
+      <div style={{background:T.bg,minHeight:"100vh",padding:"20px 16px 0",fontFamily:F}}>
+        <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,marginBottom:16}}>Diagramm</div>
+        <DiagrammView s={schueler} mat={mat} setMat={setMat} onMat={k=>setScreen({type:"mat",k})} isLehrer={false} startStufe={selStufe}/>
+      </div>
+    );
+
+    if(tab==="lernen") return (
+      <div style={{background:T.bg,minHeight:"100vh",padding:"20px 16px 0",fontFamily:F}}>
+        <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,marginBottom:4}}>Lernen</div>
+        <div style={{fontSize:14,color:T.label2,marginBottom:20}}>Verfügbares Lernmaterial</div>
+        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:24}}>
+          {AUSBILDUNG.map(s=>s.gruppen.map(g=>{const mk=`${s.id}::${g.name}`;const m2=mat[mk];if(!m2||(!(m2.videoUrl)&&!(m2.fotos?.length)&&!(m2.quiz?.length)&&!(m2.pdfUrl)))return null;return <Card key={mk} onClick={()=>setScreen({type:"mat",k:mk})} style={{padding:"14px 16px"}}><div style={{display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:22}}>{s.icon}</span><div style={{flex:1}}><div style={{fontSize:15,fontWeight:600,color:T.label,fontFamily:F}}>{g.name}</div><div style={{fontSize:12,color:T.label2,marginTop:2}}>{[m2.videoUrl&&"📹",m2.fotos?.length&&`🖼 ${m2.fotos.length}`,m2.quiz?.length&&`❓ ${m2.quiz.length}`,m2.pdfUrl&&"📄"].filter(Boolean).join(" · ")}</div></div><span style={{color:T.label3,fontSize:22}}>›</span></div></Card>;})).flat().filter(Boolean)}
+        </div>
+      </div>
+    );
+
+    if(tab==="profil") return <Profil onLogout={onLogout} isLehrer={false}/>;
+    return null;
+  };
+
+  return (
+    <div style={{fontFamily:F,background:T.bg,minHeight:"100vh"}}>
+      {screen?renderTab():<><div style={{paddingBottom:83}}>{renderTab()}</div><TabBar active={tab} onChange={setTab} isLehrer={false}/></>}
+    </div>
   );
 }
