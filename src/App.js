@@ -647,7 +647,7 @@ function MatView({ik,mat,setMat,isLehrer}) {
             }} style={{width:"100%",background:T.blue,color:"#fff",border:"none",borderRadius:14,padding:"13px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:F}}>{editQId?"✓ Änderungen speichern":"Frage speichern"}</button>
           </div>}
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {(m.quiz||[]).length===0&&!editQ&&<div style={{textAlign:"center",padding:24,color:T.label2,background:T.bg,borderRadius:12,fontSize:14}}>{isLehrer?"Klicke "+ Frage"":"Noch keine Fragen"}</div>}
+            {(m.quiz||[]).length===0&&!editQ&&<div style={{textAlign:"center",padding:24,color:T.label2,background:T.bg,borderRadius:12,fontSize:14}}>{isLehrer?"Klicke + Frage":"Noch keine Fragen"}</div>}
             {(m.quiz||[]).map(q=><div key={q.id} style={{background:T.bg,borderRadius:12,padding:"11px 14px",display:"flex",alignItems:"center",gap:8,border:`0.5px solid ${T.sep}`}}>
               <span style={{fontSize:11,background:q.typ==="mc"?`${T.blue}18`:`${T.green}18`,color:q.typ==="mc"?T.blue:T.green,borderRadius:999,padding:"3px 9px",fontWeight:600,flexShrink:0}}>{q.typ==="mc"?"MC":"W/F"}</span>
               <span style={{fontSize:13,flex:1,color:T.label}}>{q.frage}</span>
