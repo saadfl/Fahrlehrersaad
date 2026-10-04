@@ -189,11 +189,51 @@ const SwipeRow = ({children,onSwipeLeft,onSwipeRight,labelLeft,labelRight,colorL
   );
 };
 
+// ── DATENSCHUTZ & IMPRESSUM ─────────────────────────
+const RECHT_FIRMA = {name:"Fahrwerk Münster GmbH (Fahrschule Hajo)",strasse:"Bremer Platz 5",ort:"48155 Münster",tel:"0251 / 931 31595",mail:"info@fahrwerk-muenster.de",gf:"Schero Hajo",register:"HRB 20069, Amtsgericht Münster",behoerde:"Ordnungsamt Münster, Fahrerlaubnis / Fahrschulen, Tel. 0251 / 49 23 503"};
+const DATENSCHUTZ = [
+  {h:"1. Verantwortlicher",t:`Verantwortlich für die Verarbeitung deiner Daten in dieser App ist:\n${RECHT_FIRMA.name}\n${RECHT_FIRMA.strasse}, ${RECHT_FIRMA.ort}\nTelefon: ${RECHT_FIRMA.tel}\nE-Mail: ${RECHT_FIRMA.mail}`},
+  {h:"2. Welche Daten wir verarbeiten",t:"Name und Anmeldename, ein Zugangscode (PIN, nur verschlüsselt gespeichert), Fahrerlaubnisklassen, Angabe zur Sehhilfe (Brille ja/nein), Stand der Theorieprüfung, dein Ausbildungsstand (welche Themen erklärt, geübt oder sicher sind), Notizen deines Fahrlehrers zu deiner Ausbildung. Bei Fahrlehrern zusätzlich Name, Foto und eine Kurzvorstellung."},
+  {h:"3. Zwecke und Rechtsgrundlagen",t:"Wir verarbeiten die Daten, um deine Fahrausbildung durchzuführen und zu dokumentieren (Art. 6 Abs. 1 lit. b DSGVO, Ausbildungsvertrag) und um gesetzliche Pflichten zu erfüllen, z. B. den Ausbildungsnachweis nach § 6 der Durchführungsverordnung zum Fahrlehrergesetz (Art. 6 Abs. 1 lit. c DSGVO).\nDie Angabe zur Sehhilfe ist ein Gesundheitsdatum. Wir verarbeiten sie nur mit deiner ausdrücklichen Einwilligung (Art. 9 Abs. 2 lit. a DSGVO). Du kannst die Einwilligung jederzeit mit Wirkung für die Zukunft widerrufen. Bei Minderjährigen willigen die Erziehungsberechtigten ein."},
+  {h:"4. Wer hat Zugriff",t:"Du siehst in der App nur deine eigenen Daten. Fahrlehrer und die Verwaltung der Fahrschule sehen die Daten der Schüler, soweit sie diese für die Ausbildung brauchen. Eine Weitergabe an Dritte zu Werbezwecken findet nicht statt."},
+  {h:"5. Dienstleister und Speicherort",t:"Die Daten liegen in einer Datenbank von Supabase in Frankfurt am Main (EU). Die App wird über Vercel ausgeliefert; dabei können technische Daten wie die IP-Adresse kurzzeitig in Server-Protokollen anfallen. Vercel hat seinen Sitz in den USA, die Übermittlung erfolgt auf Grundlage von Standardvertragsklauseln. Mit beiden Anbietern bestehen oder werden Verträge zur Auftragsverarbeitung nach Art. 28 DSGVO geschlossen."},
+  {h:"6. Speicherdauer",t:"Wir speichern deine Ausbildungsdaten, solange deine Ausbildung läuft. Nach Abschluss der Ausbildung löschen wir sie nach fünf Jahren (§ 6 Abs. 2 der Durchführungsverordnung zum Fahrlehrergesetz)."},
+  {h:"7. Speicherung im Browser",t:"Die App speichert nach der Anmeldung eine Sitzungskennung in deinem Browser, damit du angemeldet bleibst. Sie ist technisch notwendig. Wir setzen keine Tracking- oder Werbe-Cookies ein."},
+  {h:"8. Deine Rechte",t:"Du hast das Recht auf Auskunft (Art. 15), Berichtigung (Art. 16), Löschung (Art. 17), Einschränkung der Verarbeitung (Art. 18), Datenübertragbarkeit (Art. 20) und Widerspruch (Art. 21 DSGVO). Wende dich dafür an die oben genannte Stelle.\nDu hast außerdem das Recht, dich bei einer Datenschutz-Aufsichtsbehörde zu beschweren, z. B. bei der Landesbeauftragten für Datenschutz und Informationsfreiheit Nordrhein-Westfalen, Kavalleriestraße 2–4, 40213 Düsseldorf."},
+  {h:"9. Minderjährige",t:"Sind Fahrschüler noch nicht volljährig, benötigen wir die Einwilligung der Erziehungsberechtigten. Diese bestätigt der Fahrlehrer beim Anlegen des Schülers."},
+];
+const IMPRESSUM = [
+  {h:"Angaben gemäß § 5 DDG",t:`${RECHT_FIRMA.name}\n${RECHT_FIRMA.strasse}\n${RECHT_FIRMA.ort}`},
+  {h:"Vertreten durch",t:`Geschäftsführer: ${RECHT_FIRMA.gf}`},
+  {h:"Kontakt",t:`Telefon: ${RECHT_FIRMA.tel}\nE-Mail: ${RECHT_FIRMA.mail}`},
+  {h:"Registereintrag",t:RECHT_FIRMA.register},
+  {h:"Zuständige Erlaubnisbehörde",t:RECHT_FIRMA.behoerde},
+];
+function Rechtstext({art,onBack}) {
+  const dat=art==="datenschutz"; const teile=dat?DATENSCHUTZ:IMPRESSUM;
+  return <div style={{fontFamily:F,background:"transparent",minHeight:"100dvh"}}>
+    <NavBar title={dat?"Datenschutz":"Impressum"} onBack={onBack}/>
+    <div style={{padding:"20px 16px 40px",maxWidth:640,margin:"0 auto"}}>
+      <div style={{fontSize:28,fontWeight:600,color:T.label,letterSpacing:-0.56,marginBottom:16}}>{dat?"Datenschutzerklärung":"Impressum"}</div>
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        {teile.map(x=><Card key={x.h} style={{padding:16}}>
+          <div style={{fontSize:15,fontWeight:600,color:T.label,marginBottom:8}}>{x.h}</div>
+          <div style={{fontSize:14,color:T.label2,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{x.t}</div>
+        </Card>)}
+      </div>
+    </div>
+  </div>;
+}
+const RechtLinks=({onOpen,style})=><div style={{display:"flex",justifyContent:"center",gap:18,fontSize:13,...style}}>
+  <button onClick={()=>onOpen("datenschutz")} style={{background:"none",border:"none",color:"#9DB4F0",cursor:"pointer",fontFamily:F,fontSize:13,padding:"6px 0"}}>Datenschutz</button>
+  <button onClick={()=>onOpen("impressum")} style={{background:"none",border:"none",color:"#9DB4F0",cursor:"pointer",fontFamily:F,fontSize:13,padding:"6px 0"}}>Impressum</button>
+</div>;
+
 // ── LOGIN ───────────────────────────────────────────
 function Login({onLogin}) {
   const [step,setStep]=useState("welcome"); const [rolle,setRolle]=useState("schueler");
   const [name,setName]=useState(""); const [pin,setPin]=useState("");
-  const [err,setErr]=useState(""); const [load,setLoad]=useState(false);
+  const [err,setErr]=useState(""); const [load,setLoad]=useState(false); const [recht,setRecht]=useState(null);
   const waehle=r=>{setRolle(r);setErr("");setStep("form");};
   const go=async()=>{
     setErr(""); setLoad(true);
@@ -209,6 +249,8 @@ function Login({onLogin}) {
   const inp={background:"rgba(255,255,255,.08)",border:"1px solid rgba(255,255,255,.15)",borderRadius:14,padding:"15px 16px",color:"#fff",fontSize:16,outline:"none",fontFamily:F,width:"100%",boxSizing:"border-box"};
   const huelle=inhalt=><div style={{minHeight:"100dvh",display:"flex",justifyContent:"center",fontFamily:F}}><div style={{width:"100%",maxWidth:440,minHeight:"100dvh",display:"flex",flexDirection:"column"}}>{inhalt}</div></div>;
 
+  if(recht) return <Rechtstext art={recht} onBack={()=>setRecht(null)}/>;
+
   if(step==="welcome") return huelle(
     <div style={{flex:1,display:"flex",flexDirection:"column",padding:"40px 24px 34px",gap:16}}>
       <div style={{width:64,height:64,borderRadius:18,background:"rgba(255,255,255,.1)",border:"1px solid rgba(255,255,255,.18)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:22,color:"#fff"}}>FS</div>
@@ -219,6 +261,7 @@ function Login({onLogin}) {
         <button onClick={()=>waehle("schueler")} style={{border:"none",background:"#fff",color:"#071E66",borderRadius:16,padding:17,fontSize:16,fontWeight:600,cursor:"pointer",fontFamily:F}}>Ich bin Fahrschüler</button>
         <button onClick={()=>waehle("lehrer")} style={{border:"1px solid rgba(255,255,255,.25)",background:"rgba(255,255,255,.08)",color:"#fff",borderRadius:16,padding:17,fontSize:16,fontWeight:600,cursor:"pointer",fontFamily:F}}>Ich bin Fahrlehrer</button>
       </div>
+      <RechtLinks onOpen={setRecht}/>
     </div>
   );
 
@@ -238,6 +281,7 @@ function Login({onLogin}) {
       {err&&<div style={{fontSize:14,color:"#FFB86B"}}>{err}</div>}
       <button onClick={go} disabled={load} style={{marginTop:"auto",border:"none",background:"#4C8DFF",color:"#fff",borderRadius:16,padding:17,fontSize:16,fontWeight:600,cursor:"pointer",opacity:load?0.7:1,fontFamily:F}}>{load?"Anmelden...":"Anmelden"}</button>
       <div style={{textAlign:"center",fontSize:14,color:"#9DB4F0"}}>PIN vergessen? Frag deinen Fahrlehrer.</div>
+      <RechtLinks onOpen={setRecht}/>
     </div>
   );
 }
@@ -470,11 +514,12 @@ function SRowFull({s,istMeine,onClick,onSA,onDel,onSwipeLeft,onSwipeRight,labelL
 
 // ── NEUER SCHÜLER ───────────────────────────────────
 function NeuerS({onSaved,alsMeine,profilId}) {
-  const [f,setF]=useState({name:"",pin:"",klassen:[],sehhilfe:"Keine",theorie:false}); const [err,setErr]=useState(""); const [saving,setSaving]=useState(false); const [ok,setOk]=useState(null);
+  const [einw,setEinw]=useState(false); const [f,setF]=useState({name:"",pin:"",klassen:[],sehhilfe:"Keine",theorie:false}); const [err,setErr]=useState(""); const [saving,setSaving]=useState(false); const [ok,setOk]=useState(null);
   const go=async()=>{
     if(!f.name.trim()){setErr("Namen eingeben.");return;} if(f.pin.length<6){setErr("PIN mind. 6 Stellen.");return;}
+    if(!einw){setErr("Bitte die Einwilligung bestätigen.");return;}
     setSaving(true);
-    const {data,error}=await kontoFn({aktion:"schueler_anlegen",name:f.name.trim(),pin:f.pin,klassen:f.klassen,sehhilfe:f.sehhilfe,theorie:f.theorie,alsMeine:!!(alsMeine&&profilId)});
+    const {data,error}=await kontoFn({aktion:"schueler_anlegen",name:f.name.trim(),pin:f.pin,klassen:f.klassen,sehhilfe:f.sehhilfe,theorie:f.theorie,alsMeine:!!(alsMeine&&profilId),einwilligung:true});
     setSaving(false);
     if(error){setErr("Fehler: "+error);return;}
     setOk({name:f.name.trim(),pin:f.pin,login:data.login_name});
@@ -489,6 +534,10 @@ function NeuerS({onSaved,alsMeine,profilId}) {
         <div style={{marginBottom:14}}><div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:8}}>Fahrerlaubnisklassen (optional)</div><div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{KLASSEN.map(k=>{const sel=f.klassen.includes(k);return <button key={k} onClick={()=>setF({...f,klassen:sel?f.klassen.filter(x=>x!==k):[...f.klassen,k]})} style={{padding:"8px 16px",borderRadius:999,border:`1px solid ${sel?T.blue:T.sep}`,background:sel?`${T.blue}18`:"transparent",color:sel?T.blue:T.label2,cursor:"pointer",fontSize:13,fontWeight:600,fontFamily:F}}>{k}</button>;})}</div></div>
         <div style={{marginBottom:14}}><div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:8}}>Sehhilfe (optional)</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>{["Keine","Brille"].map(o=><button key={o} onClick={()=>setF({...f,sehhilfe:o})} style={{padding:"10px",borderRadius:12,border:`1px solid ${f.sehhilfe===o?T.blue:T.sep}`,background:f.sehhilfe===o?`${T.blue}18`:"transparent",color:f.sehhilfe===o?T.blue:T.label2,cursor:"pointer",fontSize:14,fontFamily:F}}>{o}</button>)}</div></div>
         <div style={{marginBottom:20}}><div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:8}}>Theorie (optional)</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>{[{l:"⏳ Ausstehend",v:false},{l:"✅ Bestanden",v:true}].map(o=><button key={String(o.v)} onClick={()=>setF({...f,theorie:o.v})} style={{padding:"10px",borderRadius:12,border:`1px solid ${f.theorie===o.v?(o.v?T.green:T.red):T.sep}`,background:f.theorie===o.v?(o.v?`${T.green}18`:`${T.red}18`):"transparent",color:f.theorie===o.v?(o.v?T.green:T.red):T.label2,cursor:"pointer",fontSize:13,fontFamily:F}}>{o.l}</button>)}</div></div>
+        <label style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:16,cursor:"pointer"}}>
+          <input type="checkbox" checked={einw} onChange={e=>setEinw(e.target.checked)} style={{marginTop:3,width:18,height:18,flexShrink:0}}/>
+          <span style={{fontSize:13,color:T.label2,lineHeight:1.5}}>Der Schüler (bei Minderjährigen die Erziehungsberechtigten) wurde über die Datenverarbeitung informiert und hat eingewilligt, auch zur Angabe der Sehhilfe (Gesundheitsdatum). *</span>
+        </label>
         {err&&<div style={{background:T.dangerBg,color:T.red,borderRadius:10,padding:"10px 14px",fontSize:13,marginBottom:14}}>{err}</div>}
         <button onClick={go} disabled={saving} style={{width:"100%",background:T.blue,color:"#fff",border:"none",borderRadius:14,padding:14,fontSize:16,fontWeight:600,cursor:"pointer",opacity:saving?0.7:1,fontFamily:F}}>{saving?"Speichern...":"✓ Schüler anlegen"}</button>
       </Card>
@@ -961,7 +1010,8 @@ const StandortDetail = ({o}) => (
 );
 
 function Profil({selbst,fahrlehrer=[],meineIds=[],standorte=[]}) {
-  const [detail,setDetail]=useState(null);
+  const [detail,setDetail]=useState(null); const [recht,setRecht]=useState(null);
+  if(recht) return <Rechtstext art={recht} onBack={()=>setRecht(null)}/>;
   if(detail) return (
     <div style={{fontFamily:F,background:"transparent",minHeight:"100dvh",paddingBottom:100}}>
       <NavBar title={detail.typ==="so"?detail.p.name:`Fahrlehrer ${detail.p.name}`} onBack={()=>setDetail(null)}/>
@@ -988,6 +1038,7 @@ function Profil({selbst,fahrlehrer=[],meineIds=[],standorte=[]}) {
         <div style={lab}>Fahrlehrer</div>
         <div style={{display:"flex",flexDirection:"column",gap:8}}>{kacheln.map((k,i)=><FahrlehrerKachel key={k.p.id||i} p={k.p} label={k.label} onClick={()=>setDetail({typ:"fl",p:k.p})}/>)}</div>
       </div>
+      <RechtLinks onOpen={setRecht} style={{paddingBottom:16}}/>
     </div>
   );
 }
@@ -1122,7 +1173,7 @@ function AdminDashboard({onLogout}) {
 }
 
 function AdminFahrschule() {
-  const [fl,setFl]=useState([]); const [so,setSo]=useState([]); const [screen,setScreen]=useState(null); const [fehler,setFehler]=useState("");
+  const [fl,setFl]=useState([]); const [so,setSo]=useState([]); const [screen,setScreen]=useState(null); const [fehler,setFehler]=useState(""); const [recht,setRecht]=useState(null);
   const laden=useCallback(async()=>{
     const[a,b]=await Promise.all([
       supabase.from("fahrlehrer_profil").select("*").eq("rolle","lehrer").order("erstellt_am"),
@@ -1135,6 +1186,7 @@ function AdminFahrschule() {
   },[]);
   useEffect(()=>{laden();},[laden]);
 
+  if(recht) return <Rechtstext art={recht} onBack={()=>setRecht(null)}/>;
   if(screen?.kind==="fl") return <div style={{fontFamily:F,background:"transparent",minHeight:"100dvh"}}><NavBar title={screen.p?`Fahrlehrer ${screen.p.name}`:"Neuer Fahrlehrer"} onBack={()=>setScreen(null)}/><FahrlehrerForm p={screen.p} onDone={()=>{laden();setScreen(null);}}/></div>;
   if(screen?.kind==="so") return <div style={{fontFamily:F,background:"transparent",minHeight:"100dvh"}}><NavBar title={screen.p?screen.p.name:"Neuer Standort"} onBack={()=>setScreen(null)}/><StandortForm p={screen.p} onDone={()=>{laden();setScreen(null);}}/></div>;
 
@@ -1184,6 +1236,7 @@ function AdminFahrschule() {
           </Card>
         ))}
       </div>
+      <RechtLinks onOpen={setRecht} style={{paddingBottom:16}}/>
     </div>
   );
 }

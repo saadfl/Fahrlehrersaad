@@ -71,6 +71,7 @@ Deno.serve(async (req) => {
         await admin.from("schueler_info").insert({
           schueler_id: s.id, klassen: body.klassen || [], sehhilfe: body.sehhilfe || "Keine",
           theorie: !!body.theorie, fahrlehrer: "",
+          einwilligung_am: body.einwilligung ? new Date().toISOString() : null,
         });
         if (body.alsMeine && caller) {
           await admin.from("meine_schueler").insert({ fahrlehrer_id: caller.id, schueler_id: String(s.id) });

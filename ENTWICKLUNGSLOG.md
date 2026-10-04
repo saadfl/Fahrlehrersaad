@@ -113,6 +113,22 @@ archivierte Schüler wurden mit dem Migrationsdatum als Abschlussdatum versehen.
 
 ---
 
+## 2026-10-04 – Datenschutzerklärung, Impressum, Einwilligung
+
+**Entscheidung:** Die App läuft für die Fahrschule Hajo (Fahrwerk Münster GmbH); die GmbH ist
+Verantwortliche im Sinne der DSGVO. Datenschutz- und Impressumsseite in der App (Links auf der
+Anmeldeseite und im Fahrschule-Bereich), Pflicht-Häkchen beim Anlegen eines Schülers; der
+Zeitpunkt wird in `schueler_info.einwilligung_am` gespeichert.
+
+**Begründung:** Informationspflicht (Art. 13 DSGVO); Sehhilfe ist ein Gesundheitsdatum
+(Art. 9). Texte sind ein Entwurf nach Standardbausteinen und vor dem Echtbetrieb von der
+GmbH bzw. einem Datenschutzbeauftragten zu prüfen. Offen: Zustimmung der Geschäftsführung,
+Auftragsverarbeitungsverträge (Supabase, Vercel, ggf. GmbH–Betreiber).
+
+**Beteiligt:** Claude (Entwurf, Umsetzung), Nutzer (Entscheidung für Umsetzung)
+
+---
+
 ## [Datum] – [Titel des nächsten Bausteins]
 
 **Entscheidung:**
