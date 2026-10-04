@@ -71,6 +71,15 @@ const AUSBILDUNG = [
   ]},
 ];
 
+const LERN = AUSBILDUNG.flatMap(x=>{
+  if(x.id!=="leistungsstufe") return [{...x,key:x.id}];
+  const i=x.gruppen.findIndex(g=>g.name==="Situationen");
+  return [
+    {...x,key:"leistungsstufe-1",label:"Leistungsstufe Teil 1",gruppen:x.gruppen.slice(0,i)},
+    {...x,key:"leistungsstufe-2",label:"Leistungsstufe Teil 2",gruppen:x.gruppen.slice(i)},
+  ];
+});
+
 const ALL = AUSBILDUNG.flatMap(s=>s.gruppen.flatMap(g=>g.items.map(i=>`${s.id}::${g.name}::${i}`)));
 const nxt = v => ((v||0)+1)%3;
 const KLASSEN = ["B","B197","BE","B96"];
@@ -253,10 +262,10 @@ function LehrerApp({onLogout}) {
 
   if(screen?.type==="s") return <div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}><NavBar title={screen.s.name} onBack={()=>{setScreen(null);ladeListe();}}/><div style={{paddingBottom:20}}><DiagrammView s={screen.s} mat={mat} setMat={setMat} onMat={k=>setScreen({type:"m",k,back:screen})} isLehrer/></div></div>;
   if(screen?.type==="m") return <div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}><NavBar title={screen.k.split("::")[1]||"Material"} onBack={()=>setScreen(screen.back||null)}/><div style={{paddingBottom:20}}><MatView ik={screen.k} mat={mat} setMat={setMat} isLehrer/></div></div>;
-  if(screen?.type==="neu") return <div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}><NavBar title="Neuer Schüler" onBack={()=>setScreen(null)}/><NeuerS onSaved={()=>{ladeListe();setScreen(null);}}/></div>;
+  if(screen?.type==="neu") return <div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}><NavBar title="Neuer Schüler" onBack={()=>setScreen(null)}/><NeuerS alsMeine={!!screen.meine} onSaved={()=>{ladeListe();setScreen(null);}}/></div>;
 
   const tabs={
-    home:<LehrerHome liste={liste} aktiv={aktiv} archiv={archiv} meineListe={meineListe} onOpen={openS} onNeu={()=>setScreen({type:"neu"})} onAlle={f=>{setFilter(f);setTab("schueler");}}/>,
+    home:<LehrerHome liste={liste} aktiv={aktiv} archiv={archiv} meineListe={meineListe} onOpen={openS} onNeu={()=>setScreen({type:"neu",meine:true})} onAlle={f=>{setFilter(f);setTab("schueler");}}/>,
     schueler:<SListe aktiv={aktiv} archiv={archiv} meine={meine} onMeine={setMeineFlag} fehler={meineFehler} filter={filter} setFilter={setFilter} onOpen={openS} onNeu={()=>setScreen({type:"neu"})} onRefresh={ladeListe}/>,
     material:<MatListe mat={mat} onOpen={k=>setScreen({type:"m",k,back:null})}/>,
     profil:<Profil onLogout={onLogout} isLehrer/>,
@@ -294,7 +303,7 @@ function LehrerHome({liste,aktiv,archiv,meineListe,onOpen,onNeu,onAlle}) {
           </Card>
         :<div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:24}}>
             {meineListe.map(s=><SRow key={s.id} s={s} onClick={()=>onOpen(s)}/>)}
-            <button onClick={()=>onAlle("aktiv")} style={{background:"none",border:`1px solid ${T.sep}`,borderRadius:14,padding:"12px",fontSize:14,color:T.blue,cursor:"pointer",fontFamily:F,textAlign:"center"}}>Alle Schüler ({aktiv.length}) →</button>
+            <button onClick={()=>onAlle("meine")} style={{background:"none",border:`1px solid ${T.sep}`,borderRadius:14,padding:"12px",fontSize:14,color:T.blue,cursor:"pointer",fontFamily:F,textAlign:"center"}}>Alle Schüler ({meineListe.length}) →</button>
           </div>
       }
     </div>
@@ -404,7 +413,7 @@ function SRowFull({s,istMeine,onClick,onSA,onDel,onSwipeLeft,onSwipeRight,labelL
 }
 
 // ── NEUER SCHÜLER ───────────────────────────────────
-function NeuerS({onSaved}) {
+function NeuerS({onSaved,alsMeine}) {
   const [f,setF]=useState({name:"",pin:""}); const [err,setErr]=useState(""); const [saving,setSaving]=useState(false); const [ok,setOk]=useState(null);
   const go=async()=>{
     if(!f.name.trim()){setErr("Namen eingeben.");return;} if(f.pin.length<4){setErr("PIN mind. 4 Stellen.");return;}
@@ -412,7 +421,7 @@ function NeuerS({onSaved}) {
     const{data,error}=await supabase.from("schueler").insert({name:f.name.trim(),pin:f.pin,status:"aktiv"}).select().single();
     setSaving(false);
     if(error){setErr("Fehler: "+error.message);return;}
-    await supabase.from("schueler_info").insert({schueler_id:data.id,klassen:[],sehhilfe:"Keine",theorie:false,fahrlehrer:""});
+    await supabase.from("schueler_info").insert({schueler_id:data.id,klassen:[],sehhilfe:"Keine",theorie:false,fahrlehrer:alsMeine?MEINE:""});
     setOk({name:f.name.trim(),pin:f.pin}); onSaved();
   };
   if(ok) return <div style={{padding:"48px 20px",textAlign:"center",fontFamily:F}}><div style={{fontSize:64,marginBottom:16}}>🎉</div><div style={{fontSize:24,fontWeight:700,color:T.label,marginBottom:16}}>Schüler angelegt!</div><Card style={{padding:20,textAlign:"left"}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><span style={{color:T.label2}}>Name</span><span style={{fontWeight:600}}>{ok.name}</span></div><div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:T.label2}}>PIN</span><span style={{fontWeight:700,fontSize:22,letterSpacing:4,color:T.blue}}>{ok.pin}</span></div></Card></div>;
@@ -600,18 +609,18 @@ function DiagrammView({s,mat,setMat,onMat,isLehrer}) {
 
 // ── MATERIAL LISTE ──────────────────────────────────
 function MatListe({mat,onOpen}) {
-  const [sel,setSel]=useState(AUSBILDUNG[0].id);
-  const stufe=AUSBILDUNG.find(x=>x.id===sel)||AUSBILDUNG[0];
+  const [sel,setSel]=useState(LERN[0].key);
+  const stufe=LERN.find(x=>x.key===sel)||LERN[0];
   return (
     <div style={{background:"transparent",minHeight:"100vh",padding:"20px 16px 0"}}>
       <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,marginBottom:4,fontFamily:F}}>Lernen</div>
       <div style={{fontSize:14,color:T.label2,marginBottom:20,fontFamily:F}}>Lernmaterial für alle Bereiche</div>
       <div style={{display:"flex",gap:8,marginBottom:14,overflowX:"auto",paddingBottom:4}}>
-        {AUSBILDUNG.map(x=>{
-          const act=sel===x.id;
-          return <button key={x.id} onClick={()=>setSel(x.id)} style={{background:act?x.color:T.card,backdropFilter:"blur(10px)",border:`1px solid ${act?x.color:T.sep}`,borderRadius:14,padding:"10px 14px",flexShrink:0,display:"flex",flexDirection:"column",alignItems:"center",gap:3,minWidth:70,cursor:"pointer",fontFamily:F,transition:"all .2s"}}>
+        {LERN.map(x=>{
+          const act=sel===x.key;
+          return <button key={x.key} onClick={()=>setSel(x.key)} style={{background:act?x.color:T.card,backdropFilter:"blur(10px)",border:`1px solid ${act?x.color:T.sep}`,borderRadius:14,padding:"10px 14px",flexShrink:0,display:"flex",flexDirection:"column",alignItems:"center",gap:3,minWidth:70,cursor:"pointer",fontFamily:F,transition:"all .2s"}}>
             <span style={{fontSize:20}}>{x.icon}</span>
-            <span style={{fontSize:10,color:act?"#fff":T.label2,fontWeight:600}}>{x.label}</span>
+            <span style={{fontSize:10,color:act?"#fff":T.label2,fontWeight:600,textAlign:"center"}}>{x.label}</span>
           </button>;
         })}
       </div>
