@@ -832,13 +832,19 @@ function QuizView({quiz,st,setSt,onBack}) {
 }
 
 // ── PROFIL ──────────────────────────────────────────
+const Avatar = ({url,icon,size=56,round=true}) => url
+  ? <img src={url} alt="" style={{width:size,height:size,borderRadius:round?"50%":14,objectFit:"cover",flexShrink:0,display:"block"}}/>
+  : <div style={{width:size,height:size,borderRadius:round?"50%":14,background:"rgba(255,255,255,0.12)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:Math.round(size*0.45),flexShrink:0}}>{icon}</div>;
+
 const ProfilKarte = ({p,label}) => {
   const lab={fontSize:11,fontWeight:700,color:T.label2,letterSpacing:0.8,textTransform:"uppercase",marginBottom:8,paddingLeft:4};
   return (
     <div style={{marginBottom:28}}>
       {label&&<div style={{fontSize:14,fontWeight:700,color:T.blue,marginBottom:10,paddingLeft:4}}>{label}</div>}
       <div style={{background:"rgba(76,141,255,0.22)",border:"1px solid rgba(111,160,255,0.4)",borderRadius:20,padding:"22px 20px",display:"flex",alignItems:"center",gap:16,marginBottom:14}}>
-        <div style={{width:76,height:76,borderRadius:"50%",background:"rgba(255,255,255,0.18)",backdropFilter:"blur(10px)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:36,flexShrink:0,border:"2px solid rgba(255,255,255,0.3)"}}>👨‍🏫</div>
+        {p.bild_url
+          ?<img src={p.bild_url} alt="" style={{width:76,height:76,borderRadius:"50%",objectFit:"cover",flexShrink:0,border:"2px solid rgba(255,255,255,0.3)"}}/>
+          :<div style={{width:76,height:76,borderRadius:"50%",background:"rgba(255,255,255,0.18)",backdropFilter:"blur(10px)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:36,flexShrink:0,border:"2px solid rgba(255,255,255,0.3)"}}>👨‍🏫</div>}
         <div>
           <div style={{fontSize:23,fontWeight:700,color:"#fff"}}>Fahrlehrer {p.name}</div>
           {(p.tags||[]).length>0&&<div style={{display:"flex",gap:6,marginTop:10,flexWrap:"wrap"}}>
@@ -856,36 +862,83 @@ const ProfilKarte = ({p,label}) => {
   );
 };
 
+const FahrlehrerKachel = ({p,label,onClick}) => (
+  <Card onClick={onClick} style={{padding:16}}>
+    {label&&<div style={{fontSize:12,fontWeight:700,color:T.blue,marginBottom:10}}>{label}</div>}
+    <div style={{display:"flex",gap:14,alignItems:"flex-start"}}>
+      <Avatar url={p.bild_url} icon="👨‍🏫" size={56}/>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:17,fontWeight:700,color:T.label}}>Fahrlehrer {p.name}</div>
+        {(p.tags||[]).length>0&&<div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap"}}>{p.tags.map((t,i)=><span key={i} style={{background:`${T.blue}18`,color:T.blue,borderRadius:999,padding:"2px 10px",fontSize:11,fontWeight:600}}>{t}</span>)}</div>}
+        {p.ueber_mich&&<div style={{fontSize:14,color:T.label2,lineHeight:1.5,marginTop:8,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{p.ueber_mich}</div>}
+        <div style={{fontSize:13,color:T.blue,fontWeight:600,marginTop:8}}>Weiterlesen ›</div>
+      </div>
+    </div>
+  </Card>
+);
+
+const StandortKachel = ({o,onClick}) => (
+  <Card onClick={onClick} style={{padding:14}}>
+    <div style={{display:"flex",alignItems:"center",gap:14}}>
+      <Avatar url={o.bild_url} icon="📍" size={56} round={false}/>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:16,fontWeight:600,color:T.label}}>{o.name}</div>
+        {o.adresse&&<div style={{fontSize:13,color:T.label2,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{o.adresse}</div>}
+      </div>
+      <span style={{color:T.label3,fontSize:22}}>›</span>
+    </div>
+  </Card>
+);
+
+const StandortDetail = ({o}) => (
+  <div>
+    {o.bild_url&&<img src={o.bild_url} alt="" style={{width:"100%",maxHeight:260,objectFit:"cover",borderRadius:20,display:"block",marginBottom:14}}/>}
+    <div style={{fontSize:26,fontWeight:700,color:T.label,letterSpacing:-0.3,marginBottom:14}}>{o.name}</div>
+    <Card style={{padding:18}}>
+      {o.adresse&&<div style={{marginBottom:o.telefon||o.oeffnungszeiten?16:0}}><div style={{fontSize:12,color:T.label2,fontWeight:600,marginBottom:4}}>Adresse</div><div style={{fontSize:15,color:T.label,lineHeight:1.5}}>📍 {o.adresse}</div></div>}
+      {o.telefon&&<div style={{marginBottom:o.oeffnungszeiten?16:0}}><div style={{fontSize:12,color:T.label2,fontWeight:600,marginBottom:4}}>Telefon</div><div style={{fontSize:15,color:T.label}}>📞 {o.telefon}</div></div>}
+      {o.oeffnungszeiten&&<div><div style={{fontSize:12,color:T.label2,fontWeight:600,marginBottom:4}}>Öffnungszeiten</div><div style={{fontSize:15,color:T.label,lineHeight:1.6,whiteSpace:"pre-wrap"}}>🕒 {o.oeffnungszeiten}</div></div>}
+    </Card>
+  </div>
+);
+
 function Profil({onLogout,isLehrer,profil,fahrlehrer=[],meineIds=[],standorte=[]}) {
-  let karten=[];
-  if(isLehrer){karten=[{p:profil||DEFAULT_PROFIL}];}
-  else{
-    const byId=new Map(fahrlehrer.map(f=>[f.id,f]));
-    const eigene=meineIds.map(id=>byId.get(id)).filter(Boolean);
-    const rest=fahrlehrer.filter(f=>!meineIds.includes(f.id));
-    karten=[
-      ...eigene.map((p,i)=>({p,label:i===0?"Dein Fahrlehrer":i===1?"Dein zweiter Fahrlehrer":"Dein weiterer Fahrlehrer"})),
-      ...rest.map((p,i)=>({p,label:i===0&&eigene.length>0?"Weitere Fahrlehrer":null})),
-    ];
-    if(karten.length===0) karten=[{p:DEFAULT_PROFIL}];
-  }
+  const [detail,setDetail]=useState(null);
+  const abmelden=<button onClick={onLogout} style={{width:"100%",background:T.card,backdropFilter:"blur(20px)",border:`1px solid ${T.sep}`,borderRadius:14,padding:"14px",fontSize:16,fontWeight:500,cursor:"pointer",color:T.red,fontFamily:F,marginBottom:24}}>Abmelden</button>;
+  if(isLehrer) return (
+    <div style={{background:"transparent",minHeight:"100vh",padding:"20px 16px 0",fontFamily:F}}>
+      <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,marginBottom:16}}>Mein Profil</div>
+      <ProfilKarte p={profil||DEFAULT_PROFIL}/>
+      {abmelden}
+    </div>
+  );
+  if(detail) return (
+    <div style={{fontFamily:F,background:"transparent",minHeight:"100vh",paddingBottom:100}}>
+      <NavBar title={detail.typ==="so"?detail.p.name:`Fahrlehrer ${detail.p.name}`} onBack={()=>setDetail(null)}/>
+      <div style={{padding:"16px 16px 0"}}>{detail.typ==="so"?<StandortDetail o={detail.p}/>:<ProfilKarte p={detail.p}/>}</div>
+    </div>
+  );
+  const byId=new Map(fahrlehrer.map(f=>[f.id,f]));
+  const eigene=meineIds.map(id=>byId.get(id)).filter(Boolean);
+  const rest=fahrlehrer.filter(f=>!meineIds.includes(f.id));
+  const kacheln=[
+    ...eigene.map((p,i)=>({p,label:i===0?"Dein Fahrlehrer":i===1?"Dein zweiter Fahrlehrer":"Dein weiterer Fahrlehrer"})),
+    ...rest.map((p,i)=>({p,label:i===0&&eigene.length>0?"Weitere Fahrlehrer":null})),
+  ];
+  if(kacheln.length===0) kacheln.push({p:DEFAULT_PROFIL,label:null});
+  const lab={fontSize:11,fontWeight:700,color:T.label2,letterSpacing:0.8,textTransform:"uppercase",marginBottom:10,paddingLeft:4};
   return (
     <div style={{background:"transparent",minHeight:"100vh",padding:"20px 16px 0",fontFamily:F}}>
-      <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,marginBottom:16}}>{isLehrer?"Mein Profil":"Fahrschule"}</div>
-      {!isLehrer&&standorte.length>0&&<div style={{marginBottom:28}}>
-        <div style={{fontSize:11,fontWeight:700,color:T.label2,letterSpacing:0.8,textTransform:"uppercase",marginBottom:8,paddingLeft:4}}>Standorte</div>
-        <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          {standorte.map(o=><Card key={o.id} style={{padding:16}}>
-            <div style={{fontSize:16,fontWeight:600,color:T.label,marginBottom:6}}>{o.name}</div>
-            {o.adresse&&<div style={{fontSize:14,color:T.label2,marginBottom:3}}>📍 {o.adresse}</div>}
-            {o.telefon&&<div style={{fontSize:14,color:T.label2,marginBottom:3}}>📞 {o.telefon}</div>}
-            {o.oeffnungszeiten&&<div style={{fontSize:14,color:T.label2,whiteSpace:"pre-wrap"}}>🕒 {o.oeffnungszeiten}</div>}
-          </Card>)}
-        </div>
+      <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,marginBottom:16}}>Fahrschule</div>
+      {standorte.length>0&&<div style={{marginBottom:24}}>
+        <div style={lab}>Standorte</div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>{standorte.map(o=><StandortKachel key={o.id} o={o} onClick={()=>setDetail({typ:"so",p:o})}/>)}</div>
       </div>}
-      {!isLehrer&&<div style={{fontSize:11,fontWeight:700,color:T.label2,letterSpacing:0.8,textTransform:"uppercase",marginBottom:10,paddingLeft:4}}>Fahrlehrer</div>}
-      {karten.map((k,i)=><ProfilKarte key={k.p.id||i} p={k.p} label={k.label}/>)}
-      <button onClick={onLogout} style={{width:"100%",background:T.card,backdropFilter:"blur(20px)",border:`1px solid ${T.sep}`,borderRadius:14,padding:"14px",fontSize:16,fontWeight:500,cursor:"pointer",color:T.red,fontFamily:F,marginBottom:24}}>Abmelden</button>
+      <div style={{marginBottom:24}}>
+        <div style={lab}>Fahrlehrer</div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>{kacheln.map((k,i)=><FahrlehrerKachel key={k.p.id||i} p={k.p} label={k.label} onClick={()=>setDetail({typ:"fl",p:k.p})}/>)}</div>
+      </div>
+      {abmelden}
     </div>
   );
 }
@@ -1039,7 +1092,7 @@ function AdminFahrschule({onLogout}) {
         {fl.map(f=>(
           <Card key={f.id} onClick={()=>setScreen({kind:"fl",p:f})} style={{padding:"14px 16px"}}>
             <div style={{display:"flex",alignItems:"center",gap:14}}>
-              <div style={{width:44,height:44,borderRadius:"50%",background:"rgba(255,255,255,0.12)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>👨‍🏫</div>
+              <Avatar url={f.bild_url} icon="👨‍🏫" size={44}/>
               <div style={{flex:1,fontSize:16,fontWeight:600,color:T.label}}>{f.name}</div>
               <span style={{color:T.label3,fontSize:22}}>›</span>
             </div>
@@ -1052,7 +1105,7 @@ function AdminFahrschule({onLogout}) {
         {so.map(o=>(
           <Card key={o.id} onClick={()=>setScreen({kind:"so",p:o})} style={{padding:"14px 16px"}}>
             <div style={{display:"flex",alignItems:"center",gap:14}}>
-              <div style={{width:44,height:44,borderRadius:"50%",background:"rgba(255,255,255,0.12)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>📍</div>
+              <Avatar url={o.bild_url} icon="📍" size={44}/>
               <div style={{flex:1}}><div style={{fontSize:16,fontWeight:600,color:T.label}}>{o.name}</div>{o.adresse&&<div style={{fontSize:12,color:T.label2,marginTop:2}}>{o.adresse}</div>}</div>
               <span style={{color:T.label3,fontSize:22}}>›</span>
             </div>
@@ -1064,8 +1117,29 @@ function AdminFahrschule({onLogout}) {
   );
 }
 
+function BildFeld({url,onChange}) {
+  const [busy,setBusy]=useState(false); const [err,setErr]=useState("");
+  const wahl=async f=>{
+    if(!f)return; setBusy(true);setErr("");
+    const u=await uploadBild(f);
+    if(u)onChange(u);else setErr("Foto konnte nicht hochgeladen werden.");
+    setBusy(false);
+  };
+  return (
+    <div style={{marginBottom:14}}>
+      <div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:7}}>Foto</div>
+      {url&&<div style={{position:"relative",marginBottom:10}}>
+        <img src={url} alt="" style={{width:"100%",maxHeight:200,objectFit:"cover",borderRadius:12,display:"block"}}/>
+        <button onClick={()=>onChange("")} style={{position:"absolute",top:8,right:8,background:"rgba(0,0,0,0.55)",border:"none",borderRadius:"50%",width:30,height:30,color:"#fff",fontSize:16,cursor:"pointer"}}>✕</button>
+      </div>}
+      <label style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:T.inset,border:`1px solid ${T.sep}`,borderRadius:12,padding:"11px",cursor:"pointer",fontSize:14,color:T.label2}}>🖼 {busy?"Lädt hoch...":url?"Anderes Foto wählen":"Foto hochladen"}<input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{wahl(e.target.files[0]);e.target.value="";}}/></label>
+      {err&&<div style={{fontSize:13,color:T.red,marginTop:8}}>{err}</div>}
+    </div>
+  );
+}
+
 function FahrlehrerForm({p,onDone}) {
-  const [f,setF]=useState({name:p?.name||"",pin:p?.pin||"",ueber_mich:p?.ueber_mich||"",tags:(p?.tags||[]).join(", ")});
+  const [f,setF]=useState({name:p?.name||"",pin:p?.pin||"",ueber_mich:p?.ueber_mich||"",tags:(p?.tags||[]).join(", "),bild_url:p?.bild_url||""});
   const [err,setErr]=useState(""); const [saving,setSaving]=useState(false); const [del,setDel]=useState(false);
   const inp={width:"100%",boxSizing:"border-box",background:T.inset,border:`1px solid ${T.sep}`,borderRadius:12,padding:"12px 16px",fontSize:15,color:T.label,outline:"none",fontFamily:F};
   const feld=(label,key,extra={})=><div style={{marginBottom:14}}><div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:7}}>{label}</div><input style={inp} value={f[key]} onChange={e=>setF({...f,[key]:extra.digits?e.target.value.replace(/\D/g,""):e.target.value})} placeholder={extra.ph||""} maxLength={extra.max}/></div>;
@@ -1073,7 +1147,7 @@ function FahrlehrerForm({p,onDone}) {
     if(!f.name.trim()){setErr("Namen eingeben.");return;}
     if(f.pin.length<4){setErr("PIN mind. 4 Stellen.");return;}
     setSaving(true);setErr("");
-    const row={rolle:"lehrer",name:f.name.trim(),pin:f.pin,ueber_mich:f.ueber_mich.trim(),tags:f.tags.split(",").map(x=>x.trim()).filter(Boolean)};
+    const row={rolle:"lehrer",name:f.name.trim(),pin:f.pin,ueber_mich:f.ueber_mich.trim(),tags:f.tags.split(",").map(x=>x.trim()).filter(Boolean),bild_url:f.bild_url};
     const {error}=p?await supabase.from("fahrlehrer_profil").update(row).eq("id",p.id):await supabase.from("fahrlehrer_profil").insert(row);
     setSaving(false);
     if(error){setErr("Fehler: "+error.message);return;}
@@ -1088,6 +1162,7 @@ function FahrlehrerForm({p,onDone}) {
     <div style={{padding:"20px 16px",fontFamily:F}}>
       <Card style={{padding:24,marginBottom:14}}>
         <div style={{fontSize:20,fontWeight:700,color:T.label,marginBottom:20}}>{p?"Profil bearbeiten":"Neuer Fahrlehrer"}</div>
+        <BildFeld url={f.bild_url} onChange={u=>setF({...f,bild_url:u})}/>
         {feld("Name *","name",{ph:"z.B. Max"})}
         {feld("PIN (mind. 4 Stellen) *","pin",{digits:true,max:8})}
         <div style={{marginBottom:14}}><div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:7}}>Über mich</div><textarea style={{...inp,minHeight:100,resize:"vertical"}} value={f.ueber_mich} onChange={e=>setF({...f,ueber_mich:e.target.value})}/></div>
@@ -1103,14 +1178,14 @@ function FahrlehrerForm({p,onDone}) {
 }
 
 function StandortForm({p,onDone}) {
-  const [f,setF]=useState({name:p?.name||"",adresse:p?.adresse||"",telefon:p?.telefon||"",oeffnungszeiten:p?.oeffnungszeiten||""});
+  const [f,setF]=useState({name:p?.name||"",adresse:p?.adresse||"",telefon:p?.telefon||"",oeffnungszeiten:p?.oeffnungszeiten||"",bild_url:p?.bild_url||""});
   const [err,setErr]=useState(""); const [saving,setSaving]=useState(false); const [del,setDel]=useState(false);
   const inp={width:"100%",boxSizing:"border-box",background:T.inset,border:`1px solid ${T.sep}`,borderRadius:12,padding:"12px 16px",fontSize:15,color:T.label,outline:"none",fontFamily:F};
   const feld=(label,key,ph)=><div style={{marginBottom:14}}><div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:7}}>{label}</div><input style={inp} value={f[key]} onChange={e=>setF({...f,[key]:e.target.value})} placeholder={ph||""}/></div>;
   const save=async()=>{
     if(!f.name.trim()){setErr("Namen eingeben.");return;}
     setSaving(true);setErr("");
-    const row={name:f.name.trim(),adresse:f.adresse.trim(),telefon:f.telefon.trim(),oeffnungszeiten:f.oeffnungszeiten.trim()};
+    const row={name:f.name.trim(),adresse:f.adresse.trim(),telefon:f.telefon.trim(),oeffnungszeiten:f.oeffnungszeiten.trim(),bild_url:f.bild_url};
     const {error}=p?await supabase.from("standorte").update(row).eq("id",p.id):await supabase.from("standorte").insert(row);
     setSaving(false);
     if(error){setErr("Fehler: "+error.message);return;}
@@ -1125,6 +1200,7 @@ function StandortForm({p,onDone}) {
     <div style={{padding:"20px 16px",fontFamily:F}}>
       <Card style={{padding:24,marginBottom:14}}>
         <div style={{fontSize:20,fontWeight:700,color:T.label,marginBottom:20}}>{p?"Standort bearbeiten":"Neuer Standort"}</div>
+        <BildFeld url={f.bild_url} onChange={u=>setF({...f,bild_url:u})}/>
         {feld("Name *","name","z.B. Filiale Metzer Straße")}
         {feld("Adresse","adresse","Straße, PLZ Ort")}
         {feld("Telefon","telefon")}
@@ -1158,7 +1234,7 @@ function SchuelerApp({schueler,onLogout}) {
         supabase.from("schueler_info").select("*").eq("schueler_id",schueler.id).single(),
         supabase.from("lernmaterial").select("*"),
         supabase.from("quiz_fragen").select("*"),
-        supabase.from("fahrlehrer_profil").select("id,name,ueber_mich,tags,erstellt_am").eq("rolle","lehrer").order("erstellt_am"),
+        supabase.from("fahrlehrer_profil").select("id,name,ueber_mich,tags,bild_url,erstellt_am").eq("rolle","lehrer").order("erstellt_am"),
         supabase.from("meine_schueler").select("fahrlehrer_id,erstellt_am").eq("schueler_id",String(schueler.id)).order("erstellt_am"),
         supabase.from("meldungen").select("*").order("erstellt_am",{ascending:false}),
         supabase.from("standorte").select("*").order("erstellt_am"),
@@ -1188,15 +1264,6 @@ function SchuelerApp({schueler,onLogout}) {
           <div style={{fontSize:11,color:T.blue,fontWeight:700,letterSpacing:1}}>FAHRLEHRER SAAD</div>
           <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,fontFamily:F}}>Hallo, {schueler.name.split(" ")[0]}! 👋</div>
         </div>
-        {meldungen.length>0&&<div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:14}}>
-          {meldungen.map(m=><Card key={m.id} style={{overflow:"hidden"}}>
-            {m.bild_url&&<img src={m.bild_url} alt="" style={{width:"100%",maxHeight:260,objectFit:"cover",display:"block"}}/>}
-            <div style={{padding:16}}>
-              {m.text&&<div style={{fontSize:15,color:T.label,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{m.text}</div>}
-              <div style={{fontSize:11,color:T.label2,marginTop:m.text?8:0}}>{new Date(m.erstellt_am).toLocaleDateString("de-DE",{day:"2-digit",month:"long",year:"numeric"})}</div>
-            </div>
-          </Card>)}
-        </div>}
         <Card style={{padding:20,marginBottom:14}}>
           <div style={{fontSize:11,fontWeight:700,color:T.label2,letterSpacing:0.8,textTransform:"uppercase",marginBottom:12}}>Mein Fortschritt</div>
           <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:16}}>
@@ -1208,6 +1275,16 @@ function SchuelerApp({schueler,onLogout}) {
           </div>
           <button onClick={()=>setTab("diagramm")} style={{width:"100%",background:T.blue,color:"#fff",border:"none",borderRadius:14,padding:"13px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:F}}>Alle Stufen & Lernmaterial →</button>
         </Card>
+
+        {meldungen.length>0&&<div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:14}}>
+          {meldungen.map(m=><Card key={m.id} style={{overflow:"hidden"}}>
+            {m.bild_url&&<img src={m.bild_url} alt="" style={{width:"100%",maxHeight:260,objectFit:"cover",display:"block"}}/>}
+            <div style={{padding:16}}>
+              {m.text&&<div style={{fontSize:15,color:T.label,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{m.text}</div>}
+              <div style={{fontSize:11,color:T.label2,marginTop:m.text?8:0}}>{new Date(m.erstellt_am).toLocaleDateString("de-DE",{day:"2-digit",month:"long",year:"numeric"})}</div>
+            </div>
+          </Card>)}
+        </div>}
 
         {Object.keys(naechstes).length>0&&<div style={{background:`${T.blue}10`,border:`1px solid ${T.blue}30`,borderRadius:20,padding:16,marginBottom:14}}>
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}><span style={{fontSize:18}}>📍</span><div style={{fontSize:15,fontWeight:700,color:T.blue,fontFamily:F}}>Als nächstes geplant</div><span style={{background:`${T.blue}18`,color:T.blue,borderRadius:999,padding:"2px 8px",fontSize:11,fontWeight:700,marginLeft:"auto"}}>{Object.keys(naechstes).length}</span></div>
