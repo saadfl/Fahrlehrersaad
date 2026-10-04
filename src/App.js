@@ -120,8 +120,8 @@ const TabBar = ({active,onChange,isLehrer,tabsOverride}) => {
     <div style={{position:"fixed",bottom:0,left:0,right:0,height:83,background:T.tabBg,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",borderTop:`1px solid ${T.tabBorder}`,display:"flex",alignItems:"flex-start",justifyContent:"space-around",padding:"10px 0 0",zIndex:999,fontFamily:F}}>
       {tabs.map(t=>(
         <button key={t.id} onClick={()=>onChange(t.id)} style={{background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3,minWidth:60,padding:"2px 8px"}}>
-          <span style={{width:20,height:4,borderRadius:2,background:active===t.id?T.blue:"transparent",marginBottom:2}}/><span style={{fontSize:26,filter:active===t.id?"none":"grayscale(1)",opacity:active===t.id?1:0.35,transition:"all .15s"}}>{t.e}</span>
-          <span style={{fontSize:10,fontWeight:active===t.id?600:400,color:active===t.id?T.label:T.label2,transition:"color .15s"}}>{t.l}</span>
+          <span style={{width:20,height:4,borderRadius:2,background:active===t.id?T.blue:"transparent",marginBottom:2}}/><span style={{fontSize:22,filter:active===t.id?"none":"grayscale(1)",opacity:active===t.id?1:0.35,transition:"all .15s"}}>{t.e}</span>
+          <span style={{fontSize:11,fontWeight:active===t.id?600:400,color:active===t.id?T.label:T.label2,transition:"color .15s"}}>{t.l}</span>
         </button>
       ))}
     </div>
@@ -305,7 +305,7 @@ function LehrerHome({liste,aktiv,archiv,meineListe,onOpen,onNeu,onAlle}) {
     <div style={{background:"transparent",minHeight:"100vh",padding:"20px 16px 0"}}>
       <div style={{marginBottom:24}}>
         <div style={{fontSize:11,color:T.blue,fontWeight:700,letterSpacing:1,marginBottom:2,fontFamily:F}}>FAHRLEHRER SAAD</div>
-        <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,fontFamily:F}}>Dashboard</div>
+        <div style={{fontSize:28,fontWeight:600,color:T.label,letterSpacing:-0.56,fontFamily:F}}>Dashboard</div>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:24}}>
         {[{v:aktiv.length,l:"Aktiv",c:T.green,e:"🎯",f:"aktiv"},{v:meineListe.length,l:"Meine Schüler",c:T.blue,e:"👥",f:"meine"},{v:archiv.length,l:"Archiv",c:T.gray,e:"📦",f:"archiv"}].map((x,i)=>(
@@ -382,7 +382,7 @@ function SListe({aktiv,archiv,meine,onMeine,fehler,filter:filterProp,setFilter,o
   return (
     <div style={{background:"transparent",minHeight:"100vh",padding:"20px 16px 0"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:16}}>
-        <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,fontFamily:F}}>Schüler</div>
+        <div style={{fontSize:28,fontWeight:600,color:T.label,letterSpacing:-0.56,fontFamily:F}}>Schüler</div>
         <button onClick={onNeu} style={{background:T.blue,color:"#fff",border:"none",borderRadius:999,padding:"8px 16px",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:F}}>+ Neu</button>
       </div>
       {fehler&&<div style={{background:T.dangerBg,color:T.red,borderRadius:10,padding:"10px 14px",fontSize:13,marginBottom:14,border:`1px solid ${T.red}33`,fontFamily:F}}>{fehler}</div>}
@@ -641,7 +641,7 @@ function MatListe({mat,onOpen,themen,nurMitMaterial}) {
   const stufeGruppen=nurMitMaterial?stufe.gruppen.filter(g=>{const m2=mat&&mat[`${stufe.id}::${g.name}`];return m2&&(m2.videoUrl||m2.fotos?.length>0||m2.quiz?.length>0||m2.pdfUrl);}):stufe.gruppen;
   return (
     <div style={{background:"transparent",minHeight:"100vh",padding:"20px 16px 0"}}>
-      <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,marginBottom:4,fontFamily:F}}>Lernen</div>
+      <div style={{fontSize:28,fontWeight:600,color:T.label,letterSpacing:-0.56,marginBottom:4,fontFamily:F}}>Lernen</div>
       <div style={{fontSize:14,color:T.label2,marginBottom:20,fontFamily:F}}>{nurMitMaterial?"Verfügbares Lernmaterial":"Lernmaterial für alle Bereiche"}</div>
       <div style={{display:"flex",gap:8,marginBottom:14,overflowX:"auto",paddingBottom:4}}>
         {LERN.map(x=>{
@@ -923,7 +923,7 @@ function Profil({onLogout,isLehrer,profil,fahrlehrer=[],meineIds=[],standorte=[]
   const abmelden=<button onClick={onLogout} style={{width:"100%",background:T.card,backdropFilter:"blur(20px)",border:`1px solid ${T.sep}`,borderRadius:14,padding:"14px",fontSize:16,fontWeight:500,cursor:"pointer",color:T.red,fontFamily:F,marginBottom:24}}>Abmelden</button>;
   if(isLehrer) return (
     <div style={{background:"transparent",minHeight:"100vh",padding:"20px 16px 0",fontFamily:F}}>
-      <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,marginBottom:16}}>Mein Profil</div>
+      <div style={{fontSize:28,fontWeight:600,color:T.label,letterSpacing:-0.56,marginBottom:16}}>Mein Profil</div>
       <ProfilKarte p={profil||DEFAULT_PROFIL}/>
       {abmelden}
     </div>
@@ -945,7 +945,7 @@ function Profil({onLogout,isLehrer,profil,fahrlehrer=[],meineIds=[],standorte=[]
   const lab={fontSize:11,fontWeight:700,color:T.label2,letterSpacing:0.8,textTransform:"uppercase",marginBottom:10,paddingLeft:4};
   return (
     <div style={{background:"transparent",minHeight:"100vh",padding:"20px 16px 0",fontFamily:F}}>
-      <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,marginBottom:16}}>Fahrschule</div>
+      <div style={{fontSize:28,fontWeight:600,color:T.label,letterSpacing:-0.56,marginBottom:16}}>Fahrschule</div>
       {standorte.length>0&&<div style={{marginBottom:24}}>
         <div style={lab}>Standorte</div>
         <div style={{display:"flex",flexDirection:"column",gap:8}}>{standorte.map(o=><StandortKachel key={o.id} o={o} onClick={()=>setDetail({typ:"so",p:o})}/>)}</div>
@@ -1034,7 +1034,7 @@ function AdminDashboard() {
     <div style={{background:"transparent",minHeight:"100vh",padding:"20px 16px 0",fontFamily:F}}>
       <div style={{marginBottom:24}}>
         <div style={{fontSize:11,color:T.blue,fontWeight:700,letterSpacing:1,marginBottom:2}}>ADMIN</div>
-        <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5}}>Dashboard</div>
+        <div style={{fontSize:28,fontWeight:600,color:T.label,letterSpacing:-0.56}}>Dashboard</div>
       </div>
       <Card style={{padding:18,marginBottom:20}}>
         <div style={{fontSize:15,fontWeight:600,color:T.label,marginBottom:12}}>Neue Meldung für alle Schüler</div>
@@ -1090,7 +1090,7 @@ function AdminFahrschule({onLogout}) {
     <div style={{fontFamily:F,background:"transparent",minHeight:"100vh",padding:"20px 16px 0"}}>
       <div style={{marginBottom:24}}>
         <div style={{fontSize:11,color:T.blue,fontWeight:700,letterSpacing:1,marginBottom:2}}>ADMIN</div>
-        <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5}}>Fahrschule</div>
+        <div style={{fontSize:28,fontWeight:600,color:T.label,letterSpacing:-0.56}}>Fahrschule</div>
       </div>
       {fehler&&<div style={{background:T.dangerBg,color:T.red,borderRadius:10,padding:"10px 14px",fontSize:13,marginBottom:14,border:`1px solid ${T.red}33`}}>{fehler}</div>}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:24}}>
@@ -1278,7 +1278,7 @@ function SchuelerApp({schueler,onLogout}) {
       <div style={{background:"transparent",minHeight:"100vh",padding:"20px 16px 0",fontFamily:F}}>
         <div style={{marginBottom:20}}>
           <div style={{fontSize:11,color:T.blue,fontWeight:700,letterSpacing:1}}>FAHRLEHRER SAAD</div>
-          <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,fontFamily:F}}>Hallo, {schueler.name.split(" ")[0]}! 👋</div>
+          <div style={{fontSize:28,fontWeight:600,color:T.label,letterSpacing:-0.56,fontFamily:F}}>Hallo, {schueler.name.split(" ")[0]}! 👋</div>
         </div>
         <Card style={{padding:20,marginBottom:14}}>
           <div style={{fontSize:11,fontWeight:700,color:T.label2,letterSpacing:0.8,textTransform:"uppercase",marginBottom:12}}>Mein Fortschritt</div>
@@ -1307,13 +1307,13 @@ function SchuelerApp({schueler,onLogout}) {
           {Object.keys(naechstes).map(k=>{const p=k.split("::");const so=AUSBILDUNG.find(x=>x.id===p[0]);const mk=`${p[0]}::${p[1]}`;const hm=mat&&mat[mk]&&(mat[mk].videoUrl||mat[mk].fotos?.length>0||mat[mk].quiz?.length>0);return <Card key={k} style={{padding:"12px 14px",marginBottom:8}}><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:hm?10:0}}><span style={{fontSize:20}}>{so?.icon||"📍"}</span><div style={{flex:1}}><div style={{fontSize:14,fontWeight:600,color:T.label,fontFamily:F}}>{p[2]}</div><div style={{fontSize:12,color:T.label2,fontFamily:F}}>{so?.label} · {p[1]}</div></div></div>{hm&&<button onClick={()=>setScreen({type:"mat",k:mk})} style={{width:"100%",background:`${T.blue}15`,color:T.blue,border:`1px solid ${T.blue}30`,borderRadius:12,padding:"9px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:F}}>📚 Lernmaterial ansehen</button>}</Card>;})}
         </div>}
 
-        {notizen.length>0&&<Card style={{padding:16,marginBottom:14,borderLeft:`3px solid ${T.blue}`}}><div style={{fontSize:11,fontWeight:700,color:T.label2,letterSpacing:0.8,textTransform:"uppercase",marginBottom:8}}>Letzte Notiz</div><div style={{fontSize:14,color:T.label,lineHeight:1.6}}>{notizen[0].text}</div></Card>}
+        {notizen.length>0&&<div style={{background:"rgba(255,184,107,0.14)",border:"1px solid rgba(255,184,107,0.3)",borderRadius:20,padding:"14px 16px",marginBottom:14}}><div style={{fontSize:11,fontWeight:700,color:T.orange,letterSpacing:0.8,textTransform:"uppercase",marginBottom:8}}>Letzte Notiz</div><div style={{fontSize:14,color:"#FFD9AE",lineHeight:1.6}}>{notizen[0].text}</div></div>}
       </div>
     );
 
     if(tab==="diagramm") return (
       <div style={{background:"transparent",minHeight:"100vh",padding:"20px 0 0",fontFamily:F}}>
-        <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,marginBottom:16,padding:"0 16px"}}>Diagramm</div>
+        <div style={{fontSize:28,fontWeight:600,color:T.label,letterSpacing:-0.56,marginBottom:16,padding:"0 16px"}}>Diagramm</div>
         <DiagrammView s={schueler} mat={mat} setMat={setMat} onMat={k=>setScreen({type:"mat",k})} isLehrer={false} startStufe={selStufe}/>
       </div>
     );

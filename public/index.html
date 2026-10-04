@@ -2,12 +2,14 @@
 <html lang="de">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Fahrlehrer Saad</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <meta name="theme-color" content="#040B26" />
-    <style>* { margin: 0; padding: 0; box-sizing: border-box; } html,body{min-height:100%;background:#040B26 linear-gradient(160deg,#0B3FB8 0%,#071E66 40%,#040B26 100%) fixed;color:#fff;font-family:'Geist',system-ui,-apple-system,sans-serif;color-scheme:dark;} input,textarea,button{font-family:inherit;} input::placeholder,textarea::placeholder{color:#7E90C2;}</style>
+    <meta name="theme-color" content="#0B3FB8" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <style>* { margin: 0; padding: 0; box-sizing: border-box; } html{min-height:100%;background:#0B3FB8;} body{min-height:100vh;background:transparent;color:#fff;font-family:'Geist',system-ui,-apple-system,sans-serif;color-scheme:dark;} body::before{content:'';position:fixed;top:-200px;left:0;right:0;bottom:-200px;z-index:-1;background:linear-gradient(160deg,#0B3FB8 0%,#071E66 40%,#040B26 100%);} #root{padding-top:env(safe-area-inset-top);} input,textarea,button{font-family:inherit;} input::placeholder,textarea::placeholder{color:#7E90C2;}</style>
   </head>
   <body>
     <div id="root"></div>
