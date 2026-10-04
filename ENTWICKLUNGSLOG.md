@@ -80,6 +80,23 @@ bei späteren Fragen zu Code-Eigentum bei KI-unterstützter Entwicklung).
 
 ---
 
+## 2026-10-04 – Umstellung der Anmeldung auf Supabase Auth
+
+**Entscheidung:** Name + PIN bleiben für den Nutzer gleich, die Prüfung übernimmt aber
+Supabase Auth (intern als Pseudo-E-Mail `<anmeldename>@schueler|lehrer.fahrlehrer-saad.app`,
+PIN = Passwort, mind. 6 Ziffern). Konten werden über eine Edge Function
+(`konto-verwalten`) angelegt, weil der Service-Schlüssel nicht in die App darf.
+Zugriffsregeln (RLS): Schüler sehen nur ihre eigenen Daten, Lehrer alle Schüler,
+nur Admin ändert Inhalte. Klartext-PINs werden nach der Migration gelöscht.
+
+**Begründung:** Vorher war die Datenbank mit offenen Regeln (`using (true)`) für jeden
+mit dem öffentlichen Schlüssel lesbar, inkl. Klartext-PINs und Gesundheitsdatum
+(Sehhilfe). DSGVO lässt sich nicht nachträglich andocken.
+
+**Beteiligt:** Claude (Vorschlag, Umsetzung), Nutzer (Entscheidung für Umsetzung)
+
+---
+
 ## [Datum] – [Titel des nächsten Bausteins]
 
 **Entscheidung:**
