@@ -258,7 +258,7 @@ function Login({onLogin}) {
     onLogin(u);
   };
   const inp={background:"rgba(255,255,255,.08)",border:"1px solid rgba(255,255,255,.15)",borderRadius:14,padding:"15px 16px",color:"#fff",fontSize:16,outline:"none",fontFamily:F,width:"100%",boxSizing:"border-box"};
-  const huelle=inhalt=><div style={{minHeight:"100dvh",display:"flex",justifyContent:"center",fontFamily:F}}><div style={{width:"100%",maxWidth:440,minHeight:"100dvh",display:"flex",flexDirection:"column"}}>{inhalt}</div></div>;
+  const huelle=inhalt=><div style={{minHeight:"100dvh",display:"flex",justifyContent:"center",fontFamily:F,position:"relative"}}><div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"url(/login-bg.jpg) 40% 50%/cover no-repeat",zIndex:0}}/><div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"linear-gradient(180deg,rgba(7,30,102,.25) 0%,rgba(7,30,102,.55) 45%,rgba(11,63,184,.95) 100%)",zIndex:0}}/><div style={{position:"relative",zIndex:1,width:"100%",maxWidth:440,minHeight:"100dvh",display:"flex",flexDirection:"column"}}>{inhalt}</div></div>;
 
   if(recht) return <Rechtstext art={recht} onBack={()=>setRecht(null)}/>;
 

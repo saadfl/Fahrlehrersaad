@@ -142,3 +142,6 @@ Auftragsverarbeitungsverträge (Supabase, Vercel, ggf. GmbH–Betreiber).
 ## 2026-10-04 – Zufalls-PIN, WhatsApp-Zugang, Reihenfolge
 - Schüler anlegen: PIN optional (leer = Server erzeugt 6-stellige Zufalls-PIN), Knopf "Zufällig", danach Bildschirm mit "Per WhatsApp senden" (wa.me) und "Kopieren". Gleiche Knöpfe bei "Neue PIN vergeben". Edge Function konto-verwalten v4 (gibt pin zurück).
 - Reihenfolge: neue Spalte `reihenfolge` bei fahrlehrer_profil und standorte (sql/04_reihenfolge.sql, Trigger hängt neue Einträge ans Ende). Admin: Pfeile ▲▼; Sortierung gilt in Admin, Lehrer- und Schüler-App.
+
+## 2026-10-04 – Startseite mit Foto
+- Anmeldeseite (Willkommen und Anmelden) hat das Fahrschulauto als Hintergrund (public/login-bg.jpg, ca. 1400 px) mit dunkelblauem Verlauf für die Lesbarkeit.
