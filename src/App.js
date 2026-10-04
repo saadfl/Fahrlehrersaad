@@ -83,6 +83,24 @@ const LERN = AUSBILDUNG.flatMap(x=>{
 const ALL = AUSBILDUNG.flatMap(s=>s.gruppen.flatMap(g=>g.items.map(i=>`${s.id}::${g.name}::${i}`)));
 const nxt = v => ((v||0)+1)%3;
 const KLASSEN = ["B","B197","BE","B96"];
+const slug=n=>n.toLowerCase().replace(/ä/g,"ae").replace(/ö/g,"oe").replace(/ü/g,"ue").replace(/ß/g,"ss").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,".").replace(/^\.+|\.+$/g,"");
+const LOGIN_DOMAIN={schueler:"schueler.fahrlehrer-saad.app",lehrer:"lehrer.fahrlehrer-saad.app"};
+const kontoFn=async body=>{
+  const {data,error}=await supabase.functions.invoke("konto-verwalten",{body});
+  if(error){let m=error.message;try{const j=await error.context.json();if(j&&j.fehler)m=j.fehler;}catch(_){}return {error:m};}
+  if(data&&data.fehler) return {error:data.fehler};
+  return {data};
+};
+const holeNutzer=async()=>{
+  const {data:{session}}=await supabase.auth.getSession();
+  if(!session) return null;
+  const uid=session.user.id;
+  const {data:p}=await supabase.from("fahrlehrer_profil").select("*").eq("auth_id",uid).maybeSingle();
+  if(p) return {role:p.rolle==="admin"?"admin":"lehrer",profil:p};
+  const {data:sc}=await supabase.from("schueler").select("*").eq("auth_id",uid).maybeSingle();
+  if(sc) return {role:"schueler",schueler:sc};
+  return null;
+};
 const nKeys=n=>Object.keys(n).filter(k=>{const p=k.split("::");return p.length===2||!n[`${p[0]}::${p[1]}`];});
 const AbmeldenBtn=({onClick})=><button onClick={onClick} style={{background:T.card,border:`1px solid ${T.sep}`,borderRadius:999,padding:"7px 14px",fontSize:13,fontWeight:500,cursor:"pointer",color:T.red,fontFamily:F,flexShrink:0}}>Abmelden</button>;
 const DEFAULT_PROFIL = {name:"Saad",ueber_mich:"Als leidenschaftlicher Fahrlehrer in Münster helfe ich meinen Schülern, sicher und selbstbewusst ans Steuer zu kommen.",tags:["Klasse B","BE","10+ Jahre"]};
@@ -179,20 +197,14 @@ function Login({onLogin}) {
   const waehle=r=>{setRolle(r);setErr("");setStep("form");};
   const go=async()=>{
     setErr(""); setLoad(true);
-    const nm=name.trim();
-    if(rolle==="lehrer"){
-      const {data:fl}=await supabase.from("fahrlehrer_profil").select("*").ilike("name",nm).eq("pin",pin).limit(1);
-      if(fl&&fl.length>0){onLogin({role:fl[0].rolle==="admin"?"admin":"lehrer",profil:fl[0]});return;}
-      if(nm.toLowerCase()==="lehrer"&&pin==="9999"){
-        const {data:sa}=await supabase.from("fahrlehrer_profil").select("*").eq("rolle","lehrer").ilike("name","Saad").limit(1);
-        onLogin({role:"lehrer",profil:(sa&&sa[0])||null});return;
-      }
-      setLoad(false);setErr("Name oder PIN falsch.");return;
-    }
-    const {data,error}=await supabase.from("schueler").select("*").ilike("name",nm).eq("pin",pin).single();
+    const login=slug(name.trim());
+    if(!login||!pin){setLoad(false);setErr("Bitte Name und PIN eingeben.");return;}
+    const {error}=await supabase.auth.signInWithPassword({email:`${login}@${LOGIN_DOMAIN[rolle]}`,password:pin});
+    if(error){setLoad(false);setErr("Name oder PIN falsch.");return;}
+    const u=await holeNutzer();
     setLoad(false);
-    if(error||!data){setErr("Name oder PIN falsch.");return;}
-    onLogin({role:"schueler",schueler:data});
+    if(!u||(rolle==="schueler"&&u.role!=="schueler")||(rolle==="lehrer"&&u.role==="schueler")){await supabase.auth.signOut();setErr("Name oder PIN falsch.");return;}
+    onLogin(u);
   };
   const inp={background:"rgba(255,255,255,.08)",border:"1px solid rgba(255,255,255,.15)",borderRadius:14,padding:"15px 16px",color:"#fff",fontSize:16,outline:"none",fontFamily:F,width:"100%",boxSizing:"border-box"};
   const huelle=inhalt=><div style={{minHeight:"100dvh",display:"flex",justifyContent:"center",fontFamily:F}}><div style={{width:"100%",maxWidth:440,minHeight:"100dvh",display:"flex",flexDirection:"column"}}>{inhalt}</div></div>;
@@ -217,7 +229,7 @@ function Login({onLogin}) {
       <div style={{fontSize:15,color:"#9DB4F0"}}>{rolle==="lehrer"?"Als Fahrlehrer":"Als Fahrschüler"}</div>
       <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:16}}>
         <span style={{fontSize:13,color:"#9DB4F0"}}>Name</span>
-        <input value={name} onChange={e=>setName(e.target.value)} placeholder="Vor- und Nachname" onKeyDown={e=>e.key==="Enter"&&go()} style={inp}/>
+        <input value={name} onChange={e=>setName(e.target.value)} placeholder="Vor- und Nachname" autoCapitalize="words" autoCorrect="off" onKeyDown={e=>e.key==="Enter"&&go()} style={inp}/>
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:6}}>
         <span style={{fontSize:13,color:"#9DB4F0"}}>PIN</span>
@@ -232,11 +244,52 @@ function Login({onLogin}) {
 
 // ── APP ROOT ────────────────────────────────────────
 export default function App() {
-  const [user,setUser]=useState(null);
+  const [user,setUser]=useState(undefined);
+  useEffect(()=>{
+    let weg=false;
+    holeNutzer().then(u=>{if(!weg)setUser(u);});
+    const {data:sub}=supabase.auth.onAuthStateChange(ev=>{if(ev==="SIGNED_OUT")setUser(null);});
+    return ()=>{weg=true;sub.subscription.unsubscribe();};
+  },[]);
+  const abmelden=async()=>{await supabase.auth.signOut();setUser(null);};
+  if(window.location.hash==="#einrichtung") return <Einrichtung/>;
+  if(user===undefined) return <div style={{minHeight:"100dvh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:F,color:"#9DB4F0"}}>Lädt…</div>;
   if(!user) return <Login onLogin={setUser}/>;
-  if(user.role==="admin") return <AdminApp onLogout={()=>setUser(null)}/>;
-  if(user.role==="lehrer") return <LehrerApp profil={user.profil} onLogout={()=>setUser(null)}/>;
-  return <SchuelerApp schueler={user.schueler} onLogout={()=>setUser(null)}/>;
+  if(user.role==="admin") return <AdminApp onLogout={abmelden}/>;
+  if(user.role==="lehrer") return <LehrerApp profil={user.profil} onLogout={abmelden}/>;
+  return <SchuelerApp schueler={user.schueler} onLogout={abmelden}/>;
+}
+
+// ── EINRICHTUNG (einmalig: bestehende Konten umstellen) ─────
+function Einrichtung() {
+  const [key,setKey]=useState(""); const [load,setLoad]=useState(false); const [err,setErr]=useState(""); const [res,setRes]=useState(null);
+  const go=async()=>{
+    setLoad(true);setErr("");
+    const {data,error}=await kontoFn({aktion:"migrieren",key:key.trim()});
+    setLoad(false);
+    if(error){setErr(error);return;}
+    setRes(data.ergebnis||[]);
+  };
+  const inp={background:"rgba(255,255,255,.08)",border:"1px solid rgba(255,255,255,.15)",borderRadius:14,padding:"15px 16px",color:"#fff",fontSize:16,outline:"none",fontFamily:F,width:"100%",boxSizing:"border-box"};
+  return <div style={{maxWidth:440,margin:"0 auto",padding:"40px 20px",fontFamily:F,color:"#fff"}}>
+    <div style={{fontSize:26,fontWeight:600,marginBottom:8}}>Einrichtung</div>
+    <div style={{fontSize:14,color:"#9DB4F0",marginBottom:20,lineHeight:1.5}}>Legt für alle bestehenden Fahrlehrer und Schüler ein sicheres Konto an. Das Ergebnis wird nur jetzt angezeigt – bitte notieren oder einen Screenshot machen.</div>
+    {!res&&<>
+      <input value={key} onChange={e=>setKey(e.target.value)} placeholder="Einrichtungsschlüssel" style={inp}/>
+      {err&&<div style={{color:"#FFB86B",fontSize:14,marginTop:12}}>{err}</div>}
+      <button onClick={go} disabled={load||!key.trim()} style={{marginTop:16,width:"100%",border:"none",background:"#4C8DFF",color:"#fff",borderRadius:16,padding:16,fontSize:16,fontWeight:600,cursor:"pointer",opacity:load?0.7:1,fontFamily:F}}>{load?"Läuft…":"Konten anlegen"}</button>
+    </>}
+    {res&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
+      {res.length===0&&<div style={{color:"#9DB4F0"}}>Nichts zu tun – alle Konten sind schon umgestellt.</div>}
+      {res.map((r,i)=><div key={i} style={{background:"rgba(255,255,255,.08)",border:"1px solid rgba(255,255,255,.12)",borderRadius:16,padding:"12px 14px",fontSize:14,lineHeight:1.5}}>
+        <div style={{fontWeight:600}}>{r.name} <span style={{color:"#9DB4F0",fontWeight:400}}>({r.typ==="lehrer"?"Fahrlehrer":"Schüler"})</span></div>
+        {r.fehler?<div style={{color:"#FF6B6B"}}>Fehler: {r.fehler}</div>:<>
+          <div>Anmeldename: <b>{r.login_name}</b></div>
+          <div>PIN: <b style={{letterSpacing:2}}>{r.pin}</b> {r.neue_pin&&<span style={{color:"#FFB86B"}}>(neu vergeben)</span>}</div>
+        </>}
+      </div>)}
+    </div>}
+  </div>;
 }
 
 // ── LEHRER APP ──────────────────────────────────────
@@ -373,7 +426,7 @@ function SListe({aktiv,archiv,meine,onMeine,fehler,filter:filterProp,setFilter,o
   const zeigeToast=(t,ms=5000)=>{setToast(t);clearTimeout(timer.current);timer.current=setTimeout(()=>setToast(null),ms);};
   useEffect(()=>()=>clearTimeout(timer.current),[]);
   const statusAendern=async(id,st)=>{await supabase.from("schueler").update({status:st}).eq("id",id);onRefresh();};
-  const loeschen=async(id)=>{await supabase.from("schueler").delete().eq("id",id);onRefresh();};
+  const loeschen=async(id)=>{await kontoFn({aktion:"konto_loeschen",typ:"schueler",id});onRefresh();};
 
   const meineListe=aktiv.filter(s=>meine.has(String(s.id)));
   const quelle=filter==="archiv"?archiv:filter==="meine"?meineListe:aktiv;
@@ -452,22 +505,20 @@ function SRowFull({s,istMeine,onClick,onSA,onDel,onSwipeLeft,onSwipeRight,labelL
 function NeuerS({onSaved,alsMeine,profilId}) {
   const [f,setF]=useState({name:"",pin:"",klassen:[],sehhilfe:"Keine",theorie:false}); const [err,setErr]=useState(""); const [saving,setSaving]=useState(false); const [ok,setOk]=useState(null);
   const go=async()=>{
-    if(!f.name.trim()){setErr("Namen eingeben.");return;} if(f.pin.length<4){setErr("PIN mind. 4 Stellen.");return;}
+    if(!f.name.trim()){setErr("Namen eingeben.");return;} if(f.pin.length<6){setErr("PIN mind. 6 Stellen.");return;}
     setSaving(true);
-    const{data,error}=await supabase.from("schueler").insert({name:f.name.trim(),pin:f.pin,status:"aktiv"}).select().single();
+    const {data,error}=await kontoFn({aktion:"schueler_anlegen",name:f.name.trim(),pin:f.pin,klassen:f.klassen,sehhilfe:f.sehhilfe,theorie:f.theorie,alsMeine:!!(alsMeine&&profilId)});
     setSaving(false);
-    if(error){setErr("Fehler: "+error.message);return;}
-    await supabase.from("schueler_info").insert({schueler_id:data.id,klassen:f.klassen,sehhilfe:f.sehhilfe,theorie:f.theorie,fahrlehrer:""});
-    if(alsMeine&&profilId) await supabase.from("meine_schueler").insert({fahrlehrer_id:profilId,schueler_id:String(data.id)});
-    setOk({name:f.name.trim(),pin:f.pin});
+    if(error){setErr("Fehler: "+error);return;}
+    setOk({name:f.name.trim(),pin:f.pin,login:data.login_name});
   };
-  if(ok) return <div style={{padding:"48px 20px",textAlign:"center",fontFamily:F}}><div style={{fontSize:64,marginBottom:16}}>🎉</div><div style={{fontSize:24,fontWeight:700,color:T.label,marginBottom:16}}>Schüler angelegt!</div><Card style={{padding:20,textAlign:"left"}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><span style={{color:T.label2}}>Name</span><span style={{fontWeight:600}}>{ok.name}</span></div><div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:T.label2}}>PIN</span><span style={{fontWeight:700,fontSize:22,letterSpacing:4,color:T.blue}}>{ok.pin}</span></div></Card><button onClick={onSaved} style={{width:"100%",marginTop:16,background:T.blue,color:"#fff",border:"none",borderRadius:14,padding:14,fontSize:16,fontWeight:600,cursor:"pointer",fontFamily:F}}>Fertig</button></div>;
+  if(ok) return <div style={{padding:"48px 20px",textAlign:"center",fontFamily:F}}><div style={{fontSize:64,marginBottom:16}}>🎉</div><div style={{fontSize:24,fontWeight:700,color:T.label,marginBottom:16}}>Schüler angelegt!</div><Card style={{padding:20,textAlign:"left"}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><span style={{color:T.label2}}>Name</span><span style={{fontWeight:600}}>{ok.name}</span></div><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><span style={{color:T.label2}}>Anmeldename</span><span style={{fontWeight:600}}>{ok.login}</span></div><div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:T.label2}}>PIN</span><span style={{fontWeight:700,fontSize:22,letterSpacing:4,color:T.blue}}>{ok.pin}</span></div></Card><button onClick={onSaved} style={{width:"100%",marginTop:16,background:T.blue,color:"#fff",border:"none",borderRadius:14,padding:14,fontSize:16,fontWeight:600,cursor:"pointer",fontFamily:F}}>Fertig</button></div>;
   return (
     <div style={{padding:"20px 16px",fontFamily:F}}>
       <Card style={{padding:24}}>
         <div style={{fontSize:20,fontWeight:700,color:T.label,marginBottom:20}}>Neuer Schüler</div>
         <div style={{marginBottom:14}}><div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:7}}>Vor- und Nachname *</div><input style={{width:"100%",boxSizing:"border-box",background:T.inset,border:`1px solid ${T.sep}`,borderRadius:12,padding:"12px 16px",fontSize:15,color:T.label,outline:"none",fontFamily:F}} value={f.name} onChange={e=>setF({...f,name:e.target.value})} placeholder="z.B. Max Mustermann"/></div>
-        <div style={{marginBottom:20}}><div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:7}}>PIN (mind. 4 Stellen) *</div><input style={{width:"100%",boxSizing:"border-box",background:T.inset,border:`1px solid ${T.sep}`,borderRadius:12,padding:"12px 16px",fontSize:22,color:T.label,outline:"none",letterSpacing:6,fontFamily:F}} type="password" maxLength={8} value={f.pin} onChange={e=>setF({...f,pin:e.target.value.replace(/\D/g,"")})}/><div style={{fontSize:12,color:T.label2,marginTop:6}}>💡 PIN persönlich mitteilen</div></div>
+        <div style={{marginBottom:20}}><div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:7}}>PIN (mind. 6 Stellen) *</div><input style={{width:"100%",boxSizing:"border-box",background:T.inset,border:`1px solid ${T.sep}`,borderRadius:12,padding:"12px 16px",fontSize:22,color:T.label,outline:"none",letterSpacing:6,fontFamily:F}} type="password" inputMode="numeric" maxLength={8} value={f.pin} onChange={e=>setF({...f,pin:e.target.value.replace(/\D/g,"")})}/><div style={{fontSize:12,color:T.label2,marginTop:6}}>💡 PIN persönlich mitteilen</div></div>
         <div style={{marginBottom:14}}><div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:8}}>Fahrerlaubnisklassen (optional)</div><div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{KLASSEN.map(k=>{const sel=f.klassen.includes(k);return <button key={k} onClick={()=>setF({...f,klassen:sel?f.klassen.filter(x=>x!==k):[...f.klassen,k]})} style={{padding:"8px 16px",borderRadius:999,border:`1px solid ${sel?T.blue:T.sep}`,background:sel?`${T.blue}18`:"transparent",color:sel?T.blue:T.label2,cursor:"pointer",fontSize:13,fontWeight:600,fontFamily:F}}>{k}</button>;})}</div></div>
         <div style={{marginBottom:14}}><div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:8}}>Sehhilfe (optional)</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>{["Keine","Brille"].map(o=><button key={o} onClick={()=>setF({...f,sehhilfe:o})} style={{padding:"10px",borderRadius:12,border:`1px solid ${f.sehhilfe===o?T.blue:T.sep}`,background:f.sehhilfe===o?`${T.blue}18`:"transparent",color:f.sehhilfe===o?T.blue:T.label2,cursor:"pointer",fontSize:14,fontFamily:F}}>{o}</button>)}</div></div>
         <div style={{marginBottom:20}}><div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:8}}>Theorie (optional)</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>{[{l:"⏳ Ausstehend",v:false},{l:"✅ Bestanden",v:true}].map(o=><button key={String(o.v)} onClick={()=>setF({...f,theorie:o.v})} style={{padding:"10px",borderRadius:12,border:`1px solid ${f.theorie===o.v?(o.v?T.green:T.red):T.sep}`,background:f.theorie===o.v?(o.v?`${T.green}18`:`${T.red}18`):"transparent",color:f.theorie===o.v?(o.v?T.green:T.red):T.label2,cursor:"pointer",fontSize:13,fontFamily:F}}>{o.l}</button>)}</div></div>
@@ -485,7 +536,7 @@ function DiagrammView({s,mat,setMat,onMat,isLehrer,startStufe,adminEdit}) {
   const [themen,setThemen]=useState({}); const [naechstes,setNaechstes]=useState({});
   const [notizen,setNotizen]=useState([]); const [info,setInfo]=useState(null);
   const [infoF,setInfoF]=useState({klassen:[],sehhilfe:"Keine",theorie:false});
-  const [editI,setEditI]=useState(false); const [pinVis,setPinVis]=useState(false);
+  const [editI,setEditI]=useState(false); const [neuePin,setNeuePin]=useState(""); const [pinFehler,setPinFehler]=useState("");
   const [notizT,setNotizT]=useState(""); const [load,setLoad]=useState(true);
 
   const laden=useCallback(async()=>{
@@ -505,6 +556,13 @@ function DiagrammView({s,mat,setMat,onMat,isLehrer,startStufe,adminEdit}) {
 
   const toggle=async k=>{const v=nxt(themen[k]||0);setThemen(p=>({...p,[k]:v}));await supabase.from("ausbildungsstand").upsert({schueler_id:s.id,item_key:k,wert:v,aktualisiert_am:new Date().toISOString()},{onConflict:"schueler_id,item_key"});};
   const toggleN=async k=>{const ist=!!naechstes[k];const nm={...naechstes};if(ist)delete nm[k];else nm[k]=true;setNaechstes(nm);await supabase.from("ausbildungsstand").upsert({schueler_id:s.id,item_key:k,wert:themen[k]||0,naechstes:!ist,aktualisiert_am:new Date().toISOString()},{onConflict:"schueler_id,item_key"});};
+  const pinNeu=async()=>{
+    if(!window.confirm("Neue PIN für "+s.name+" vergeben? Die alte PIN wird ungültig.")) return;
+    setPinFehler("");
+    const {data,error}=await kontoFn({aktion:"pin_setzen",typ:"schueler",id:s.id});
+    if(error){setPinFehler(error);return;}
+    setNeuePin(data.pin);
+  };
   const saveInfo=async()=>{await supabase.from("schueler_info").upsert({schueler_id:s.id,...infoF,aktualisiert_am:new Date().toISOString()},{onConflict:"schueler_id"});setInfo(p=>({...p,...infoF}));setEditI(false);};
 
   const pct=Math.round((Object.values(themen).filter(v=>v===2).length/ALL.length)*100);
@@ -614,13 +672,16 @@ function DiagrammView({s,mat,setMat,onMat,isLehrer,startStufe,adminEdit}) {
       {tab==="akte"&&isLehrer&&<div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:20}}>
         <div style={{background:T.white,borderRadius:16,overflow:"hidden",border:`1px solid ${T.glassBorder}`,boxShadow:T.s1}}>
           <Row><span style={{flex:1,fontSize:15,color:T.label}}>Name</span><span style={{fontSize:15,fontWeight:500}}>{s.name}</span></Row>
+          <Row><span style={{flex:1,fontSize:15,color:T.label}}>Anmeldename</span><span style={{fontSize:15,fontWeight:500}}>{s.login_name||"–"}</span></Row>
           <Row last><span style={{flex:1,fontSize:15,color:T.label}}>PIN</span>
             <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <span style={{fontSize:18,fontWeight:700,letterSpacing:pinVis?3:2,color:T.blue}}>{pinVis?s.pin:"••••"}</span>
-              <button onClick={()=>setPinVis(!pinVis)} style={{background:`${T.blue}18`,color:T.blue,border:"none",borderRadius:8,padding:"4px 10px",fontSize:12,cursor:"pointer",fontFamily:F}}>{pinVis?"Verbergen":"Anzeigen"}</button>
+              {neuePin&&<span style={{fontSize:18,fontWeight:700,letterSpacing:3,color:T.blue}}>{neuePin}</span>}
+              <button onClick={pinNeu} style={{background:`${T.blue}18`,color:T.blue,border:"none",borderRadius:8,padding:"4px 10px",fontSize:12,cursor:"pointer",fontFamily:F}}>Neue PIN vergeben</button>
             </div>
           </Row>
         </div>
+        {pinFehler&&<div style={{background:T.dangerBg,color:T.red,borderRadius:10,padding:"10px 14px",fontSize:13}}>{pinFehler}</div>}
+        {neuePin&&<div style={{fontSize:12,color:T.label2}}>Diese PIN wird nur jetzt angezeigt. Bitte dem Schüler weitergeben.</div>}
         <Card style={{padding:18}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
             <div style={{fontSize:15,fontWeight:600,color:T.label}}>Schüler-Infos</div>
@@ -1162,23 +1223,34 @@ function BildFeld({url,onChange}) {
 }
 
 function FahrlehrerForm({p,onDone}) {
-  const [f,setF]=useState({name:p?.name||"",pin:p?.pin||"",ueber_mich:p?.ueber_mich||"",tags:(p?.tags||[]).join(", "),bild_url:p?.bild_url||""});
+  const [f,setF]=useState({name:p?.name||"",pin:"",ueber_mich:p?.ueber_mich||"",tags:(p?.tags||[]).join(", "),bild_url:p?.bild_url||""});
   const [err,setErr]=useState(""); const [saving,setSaving]=useState(false); const [del,setDel]=useState(false);
   const inp={width:"100%",boxSizing:"border-box",background:T.inset,border:`1px solid ${T.sep}`,borderRadius:12,padding:"12px 16px",fontSize:15,color:T.label,outline:"none",fontFamily:F};
   const feld=(label,key,extra={})=><div style={{marginBottom:14}}><div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:7}}>{label}</div><input style={inp} value={f[key]} onChange={e=>setF({...f,[key]:extra.digits?e.target.value.replace(/\D/g,""):e.target.value})} placeholder={extra.ph||""} maxLength={extra.max}/></div>;
   const save=async()=>{
     if(!f.name.trim()){setErr("Namen eingeben.");return;}
-    if(f.pin.length<4){setErr("PIN mind. 4 Stellen.");return;}
+    if(!p&&f.pin.length<6){setErr("PIN mind. 6 Stellen.");return;}
+    if(p&&f.pin&&f.pin.length<6){setErr("PIN mind. 6 Stellen (oder leer lassen).");return;}
     setSaving(true);setErr("");
-    const row={rolle:"lehrer",name:f.name.trim(),pin:f.pin,ueber_mich:f.ueber_mich.trim(),tags:f.tags.split(",").map(x=>x.trim()).filter(Boolean),bild_url:f.bild_url};
-    const {error}=p?await supabase.from("fahrlehrer_profil").update(row).eq("id",p.id):await supabase.from("fahrlehrer_profil").insert(row);
-    setSaving(false);
-    if(error){setErr("Fehler: "+error.message);return;}
+    const tags=f.tags.split(",").map(x=>x.trim()).filter(Boolean);
+    if(!p){
+      const {error}=await kontoFn({aktion:"lehrer_anlegen",name:f.name.trim(),pin:f.pin,ueber_mich:f.ueber_mich.trim(),tags,bild_url:f.bild_url});
+      setSaving(false);
+      if(error){setErr("Fehler: "+error);return;}
+    }else{
+      const {error}=await supabase.from("fahrlehrer_profil").update({name:f.name.trim(),ueber_mich:f.ueber_mich.trim(),tags,bild_url:f.bild_url}).eq("id",p.id);
+      if(error){setSaving(false);setErr("Fehler: "+error.message);return;}
+      if(f.pin){
+        const {error:e2}=await kontoFn({aktion:"pin_setzen",typ:"lehrer",id:p.id,pin:f.pin});
+        if(e2){setSaving(false);setErr("Profil gespeichert, aber PIN nicht geändert: "+e2);return;}
+      }
+      setSaving(false);
+    }
     onDone();
   };
   const loeschen=async()=>{
-    const {error}=await supabase.from("fahrlehrer_profil").delete().eq("id",p.id);
-    if(error){setErr("Fehler: "+error.message);setDel(false);return;}
+    const {error}=await kontoFn({aktion:"konto_loeschen",typ:"lehrer",id:p.id});
+    if(error){setErr("Fehler: "+error);setDel(false);return;}
     onDone();
   };
   return (
@@ -1187,7 +1259,7 @@ function FahrlehrerForm({p,onDone}) {
         <div style={{fontSize:20,fontWeight:700,color:T.label,marginBottom:20}}>{p?"Profil bearbeiten":"Neuer Fahrlehrer"}</div>
         <BildFeld url={f.bild_url} onChange={u=>setF({...f,bild_url:u})}/>
         {feld("Name *","name",{ph:"z.B. Max"})}
-        {feld("PIN (mind. 4 Stellen) *","pin",{digits:true,max:8})}
+        {feld(p?"Neue PIN (leer = unverändert)":"PIN (mind. 6 Stellen) *","pin",{digits:true,max:8})}
         <div style={{marginBottom:14}}><div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:7}}>Über mich</div><textarea style={{...inp,minHeight:100,resize:"vertical"}} value={f.ueber_mich} onChange={e=>setF({...f,ueber_mich:e.target.value})}/></div>
         {feld("Etiketten (mit Komma trennen)","tags",{ph:"Klasse B, BE, 10+ Jahre"})}
         {err&&<div style={{background:T.dangerBg,color:T.red,borderRadius:10,padding:"10px 14px",fontSize:13,marginBottom:14}}>{err}</div>}
