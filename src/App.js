@@ -439,8 +439,8 @@ function NeuerS({onSaved,alsMeine}) {
 }
 
 // ── DIAGRAMM VIEW ───────────────────────────────────
-function DiagrammView({s,mat,setMat,onMat,isLehrer}) {
-  const [sel,setSel]=useState(AUSBILDUNG[0].id);
+function DiagrammView({s,mat,setMat,onMat,isLehrer,startStufe}) {
+  const [sel,setSel]=useState(startStufe||AUSBILDUNG[0].id);
   const [tab,setTab]=useState("diagramm");
   const [themen,setThemen]=useState({}); const [naechstes,setNaechstes]=useState({});
   const [notizen,setNotizen]=useState([]); const [info,setInfo]=useState(null);
@@ -608,19 +608,23 @@ function DiagrammView({s,mat,setMat,onMat,isLehrer}) {
 }
 
 // ── MATERIAL LISTE ──────────────────────────────────
-function MatListe({mat,onOpen}) {
+function MatListe({mat,onOpen,themen,nurMitMaterial}) {
   const [sel,setSel]=useState(LERN[0].key);
   const stufe=LERN.find(x=>x.key===sel)||LERN[0];
+  const stufeGruppen=nurMitMaterial?stufe.gruppen.filter(g=>{const m2=mat&&mat[`${stufe.id}::${g.name}`];return m2&&(m2.videoUrl||m2.fotos?.length>0||m2.quiz?.length>0||m2.pdfUrl);}):stufe.gruppen;
   return (
     <div style={{background:"transparent",minHeight:"100vh",padding:"20px 16px 0"}}>
       <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,marginBottom:4,fontFamily:F}}>Lernen</div>
-      <div style={{fontSize:14,color:T.label2,marginBottom:20,fontFamily:F}}>Lernmaterial für alle Bereiche</div>
+      <div style={{fontSize:14,color:T.label2,marginBottom:20,fontFamily:F}}>{nurMitMaterial?"Verfügbares Lernmaterial":"Lernmaterial für alle Bereiche"}</div>
       <div style={{display:"flex",gap:8,marginBottom:14,overflowX:"auto",paddingBottom:4}}>
         {LERN.map(x=>{
           const act=sel===x.key;
+          const ks=x.gruppen.flatMap(g=>g.items.map(i=>`${x.id}::${g.name}::${i}`));
+          const sp=themen?Math.round((ks.filter(k=>(themen[k]||0)===2).length/ks.length)*100):null;
           return <button key={x.key} onClick={()=>setSel(x.key)} style={{background:act?x.color:T.card,backdropFilter:"blur(10px)",border:`1px solid ${act?x.color:T.sep}`,borderRadius:14,padding:"10px 14px",flexShrink:0,display:"flex",flexDirection:"column",alignItems:"center",gap:3,minWidth:70,cursor:"pointer",fontFamily:F,transition:"all .2s"}}>
             <span style={{fontSize:20}}>{x.icon}</span>
             <span style={{fontSize:10,color:act?"#fff":T.label2,fontWeight:600,textAlign:"center"}}>{x.label}</span>
+            {sp!==null&&<span style={{fontSize:12,fontWeight:700,color:act?"#fff":x.color}}>{sp}%</span>}
           </button>;
         })}
       </div>
@@ -630,10 +634,11 @@ function MatListe({mat,onOpen}) {
             <span style={{fontSize:22}}>{stufe.icon}</span>
             <div style={{flex:1}}><div style={{fontSize:15,fontWeight:600,color:T.label,fontFamily:F}}>{stufe.label}</div><div style={{fontSize:12,color:T.label2,fontFamily:F}}>{stufe.gruppen.flatMap(g=>g.items).length} Punkte</div></div>
           </div>
-          {stufe.gruppen.map((g,gi)=>{
+          {stufeGruppen.length===0&&<Row last><div style={{flex:1,textAlign:"center",fontSize:14,color:T.label2,fontFamily:F}}>Noch kein Lernmaterial</div></Row>}
+          {stufeGruppen.map((g,gi)=>{
             const mk=`${stufe.id}::${g.name}`;
             const hm=mat&&mat[mk]&&(mat[mk].videoUrl||mat[mk].fotos?.length>0||mat[mk].quiz?.length>0||mat[mk].pdfUrl);
-            return <Row key={g.name} last={gi===stufe.gruppen.length-1} onClick={()=>onOpen(mk)}>
+            return <Row key={g.name} last={gi===stufeGruppen.length-1} onClick={()=>onOpen(mk)}>
               <div style={{flex:1}}><div style={{fontSize:14,fontWeight:500,color:T.label,fontFamily:F}}>{g.name}</div><div style={{fontSize:12,color:T.label2,fontFamily:F}}>{g.items.length} Punkte</div></div>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 {hm&&<span style={{fontSize:11,background:`${T.blue}18`,color:T.blue,borderRadius:999,padding:"3px 9px",fontWeight:600}}>Material</span>}
@@ -908,29 +913,17 @@ function SchuelerApp({schueler,onLogout}) {
         </div>}
 
         {notizen.length>0&&<Card style={{padding:16,marginBottom:14,borderLeft:`3px solid ${T.blue}`}}><div style={{fontSize:11,fontWeight:700,color:T.label2,letterSpacing:0.8,textTransform:"uppercase",marginBottom:8}}>Letzte Notiz</div><div style={{fontSize:14,color:T.label,lineHeight:1.6}}>{notizen[0].text}</div></Card>}
-
-        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:24}}>
-          {[{e:"🏆",t:"Prüfungsreife",d:"Bald verfügbar"},{e:"📖",t:"Theorie",d:"14 Lektionen"}].map((x,i)=><Card key={i} style={{padding:14,opacity:0.55}}><div style={{display:"flex",alignItems:"center",gap:12,justifyContent:"space-between"}}><div style={{display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:26}}>{x.e}</span><div><div style={{fontSize:15,fontWeight:600,color:T.label,fontFamily:F}}>{x.t}</div><div style={{fontSize:12,color:T.label2,fontFamily:F}}>{x.d}</div></div></div><div style={{background:`${T.purple}18`,color:T.purple,borderRadius:999,padding:"3px 10px",fontSize:11,fontWeight:700}}>Bald</div></div></Card>)}
-        </div>
       </div>
     );
 
     if(tab==="diagramm") return (
-      <div style={{background:"transparent",minHeight:"100vh",padding:"20px 16px 0",fontFamily:F}}>
-        <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,marginBottom:16}}>Diagramm</div>
+      <div style={{background:"transparent",minHeight:"100vh",padding:"20px 0 0",fontFamily:F}}>
+        <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,marginBottom:16,padding:"0 16px"}}>Diagramm</div>
         <DiagrammView s={schueler} mat={mat} setMat={setMat} onMat={k=>setScreen({type:"mat",k})} isLehrer={false} startStufe={selStufe}/>
       </div>
     );
 
-    if(tab==="lernen") return (
-      <div style={{background:"transparent",minHeight:"100vh",padding:"20px 16px 0",fontFamily:F}}>
-        <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,marginBottom:4}}>Lernen</div>
-        <div style={{fontSize:14,color:T.label2,marginBottom:20}}>Verfügbares Lernmaterial</div>
-        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:24}}>
-          {AUSBILDUNG.map(s=>s.gruppen.map(g=>{const mk=`${s.id}::${g.name}`;const m2=mat[mk];if(!m2||(!(m2.videoUrl)&&!(m2.fotos?.length)&&!(m2.quiz?.length)&&!(m2.pdfUrl)))return null;return <Card key={mk} onClick={()=>setScreen({type:"mat",k:mk})} style={{padding:"14px 16px"}}><div style={{display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:22}}>{s.icon}</span><div style={{flex:1}}><div style={{fontSize:15,fontWeight:600,color:T.label,fontFamily:F}}>{g.name}</div><div style={{fontSize:12,color:T.label2,marginTop:2}}>{[m2.videoUrl&&"📹",m2.fotos?.length&&`🖼 ${m2.fotos.length}`,m2.quiz?.length&&`❓ ${m2.quiz.length}`,m2.pdfUrl&&"📄"].filter(Boolean).join(" · ")}</div></div><span style={{color:T.label3,fontSize:22}}>›</span></div></Card>;})).flat().filter(Boolean)}
-        </div>
-      </div>
-    );
+    if(tab==="lernen") return <MatListe mat={mat} themen={themen} nurMitMaterial onOpen={k=>setScreen({type:"mat",k})}/>;
 
     if(tab==="profil") return <Profil onLogout={onLogout} isLehrer={false}/>;
     return null;
