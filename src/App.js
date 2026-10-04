@@ -212,6 +212,7 @@ function LehrerApp({onLogout}) {
   const [screen,setScreen]=useState(null);
   const [meine,setMeine]=useState(()=>new Set());
   const [filter,setFilter]=useState("aktiv");
+  const [meineFehler,setMeineFehler]=useState("");
 
   const ladeListe=useCallback(async()=>{
     const[a,b]=await Promise.all([
@@ -219,7 +220,8 @@ function LehrerApp({onLogout}) {
       supabase.from("schueler_info").select("schueler_id,fahrlehrer").eq("fahrlehrer",MEINE),
     ]);
     setListe(a.data||[]);
-    setMeine(new Set((b.data||[]).map(x=>x.schueler_id)));
+    if(b.error){setMeineFehler("Meine Schüler konnten nicht geladen werden: "+b.error.message);}
+    else{setMeineFehler("");setMeine(new Set((b.data||[]).map(x=>x.schueler_id)));}
   },[]);
   const ladeMat=useCallback(async()=>{
     const[m,q]=await Promise.all([supabase.from("lernmaterial").select("*"),supabase.from("quiz_fragen").select("*")]);
@@ -232,8 +234,15 @@ function LehrerApp({onLogout}) {
   useEffect(()=>{ladeListe();ladeMat();},[ladeListe,ladeMat]);
 
   const setMeineFlag=async(id,on)=>{
-    setMeine(p=>{const n=new Set(p);if(on)n.add(id);else n.delete(id);return n;});
-    await supabase.from("schueler_info").upsert({schueler_id:id,fahrlehrer:on?MEINE:""},{onConflict:"schueler_id"});
+    const wert=on?MEINE:"";
+    const apply=v=>setMeine(p=>{const n=new Set(p);if(v)n.add(id);else n.delete(id);return n;});
+    apply(on);
+    let {data,error}=await supabase.from("schueler_info").update({fahrlehrer:wert}).eq("schueler_id",id).select("schueler_id");
+    if(!error&&(!data||data.length===0)){
+      ({error}=await supabase.from("schueler_info").insert({schueler_id:id,klassen:[],sehhilfe:"Keine",theorie:false,fahrlehrer:wert}));
+    }
+    if(error){apply(!on);return error.message;}
+    return null;
   };
 
   const openS=s=>setScreen({type:"s",s});
@@ -248,7 +257,7 @@ function LehrerApp({onLogout}) {
 
   const tabs={
     home:<LehrerHome liste={liste} aktiv={aktiv} archiv={archiv} meineListe={meineListe} onOpen={openS} onNeu={()=>setScreen({type:"neu"})} onAlle={f=>{setFilter(f);setTab("schueler");}}/>,
-    schueler:<SListe aktiv={aktiv} archiv={archiv} meine={meine} onMeine={setMeineFlag} filter={filter} setFilter={setFilter} onOpen={openS} onNeu={()=>setScreen({type:"neu"})} onRefresh={ladeListe}/>,
+    schueler:<SListe aktiv={aktiv} archiv={archiv} meine={meine} onMeine={setMeineFlag} fehler={meineFehler} filter={filter} setFilter={setFilter} onOpen={openS} onNeu={()=>setScreen({type:"neu"})} onRefresh={ladeListe}/>,
     material:<MatListe mat={mat} onOpen={k=>setScreen({type:"m",k,back:null})}/>,
     profil:<Profil onLogout={onLogout} isLehrer/>,
   };
@@ -313,10 +322,10 @@ function SRow({s,onClick}) {
 }
 
 // ── SCHÜLER LISTE ───────────────────────────────────
-function SListe({aktiv,archiv,meine,onMeine,filter,setFilter,onOpen,onNeu,onRefresh}) {
+function SListe({aktiv,archiv,meine,onMeine,fehler,filter,setFilter,onOpen,onNeu,onRefresh}) {
   const [suche,setSuche]=useState(""); const [toast,setToast]=useState(null);
   const timer=useRef(null);
-  const zeigeToast=t=>{setToast(t);clearTimeout(timer.current);timer.current=setTimeout(()=>setToast(null),5000);};
+  const zeigeToast=(t,ms=5000)=>{setToast(t);clearTimeout(timer.current);timer.current=setTimeout(()=>setToast(null),ms);};
   useEffect(()=>()=>clearTimeout(timer.current),[]);
   const statusAendern=async(id,st)=>{await supabase.from("schueler").update({status:st}).eq("id",id);onRefresh();};
   const loeschen=async(id)=>{await supabase.from("schueler").delete().eq("id",id);onRefresh();};
@@ -327,7 +336,12 @@ function SListe({aktiv,archiv,meine,onMeine,filter,setFilter,onOpen,onNeu,onRefr
 
   const archivieren=s=>{const alt=s.status||"aktiv";statusAendern(s.id,"archiviert");zeigeToast({text:`${s.name} archiviert`,undo:()=>statusAendern(s.id,alt)});};
   const reaktivieren=s=>{const alt=s.status||"archiviert";statusAendern(s.id,"aktiv");zeigeToast({text:`${s.name} reaktiviert`,undo:()=>statusAendern(s.id,alt)});};
-  const meineWechsel=s=>{const ist=meine.has(s.id);onMeine(s.id,!ist);zeigeToast({text:ist?`${s.name} aus „Meine Schüler“ entfernt`:`${s.name} zu „Meine Schüler“ hinzugefügt`,undo:()=>onMeine(s.id,ist)});};
+  const meineSetzen=async(s,on,mitUndo)=>{
+    const err=await onMeine(s.id,on);
+    if(err){zeigeToast({text:`Speichern fehlgeschlagen: ${err}`},15000);return;}
+    zeigeToast({text:on?`${s.name} zu „Meine Schüler“ hinzugefügt`:`${s.name} aus „Meine Schüler“ entfernt`,undo:mitUndo?()=>meineSetzen(s,!on,false):null});
+  };
+  const meineWechsel=s=>meineSetzen(s,!meine.has(s.id),true);
 
   const tabs=[{l:`Aktiv (${aktiv.length})`,v:"aktiv"},{l:`Meine Schüler (${meineListe.length})`,v:"meine"},{l:`Archiv (${archiv.length})`,v:"archiv"}];
   return (
@@ -336,6 +350,7 @@ function SListe({aktiv,archiv,meine,onMeine,filter,setFilter,onOpen,onNeu,onRefr
         <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,fontFamily:F}}>Schüler</div>
         <button onClick={onNeu} style={{background:T.blue,color:"#fff",border:"none",borderRadius:999,padding:"8px 16px",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:F}}>+ Neu</button>
       </div>
+      {fehler&&<div style={{background:T.dangerBg,color:T.red,borderRadius:10,padding:"10px 14px",fontSize:13,marginBottom:14,border:`1px solid ${T.red}33`,fontFamily:F}}>{fehler}</div>}
       <div style={{background:T.inset,borderRadius:12,padding:"9px 14px",display:"flex",gap:8,alignItems:"center",marginBottom:14,border:`1px solid ${T.sep}`}}>
         <span style={{color:T.label2}}>🔍</span>
         <input value={suche} onChange={e=>setSuche(e.target.value)} placeholder="Suchen..." style={{background:"none",border:"none",outline:"none",fontSize:15,color:T.label,flex:1,fontFamily:F}}/>
@@ -359,7 +374,7 @@ function SListe({aktiv,archiv,meine,onMeine,filter,setFilter,onOpen,onNeu,onRefr
       </div>
       {toast&&<div style={{position:"fixed",left:16,right:16,bottom:95,zIndex:1000,background:"rgba(4,11,38,0.95)",border:`1px solid ${T.glassBorder}`,borderRadius:16,padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,fontFamily:F}}>
         <span style={{fontSize:14,color:T.label}}>{toast.text}</span>
-        <button onClick={()=>{toast.undo();setToast(null);}} style={{background:"none",border:"none",color:T.blue,fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:F,flexShrink:0}}>Rückgängig</button>
+        {toast.undo&&<button onClick={()=>{toast.undo();setToast(null);}} style={{background:"none",border:"none",color:T.blue,fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:F,flexShrink:0}}>Rückgängig</button>}
       </div>}
     </div>
   );
