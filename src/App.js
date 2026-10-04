@@ -171,43 +171,59 @@ const SwipeRow = ({children,onSwipeLeft,onSwipeRight,labelLeft,labelRight,colorL
 
 // ── LOGIN ───────────────────────────────────────────
 function Login({onLogin}) {
+  const [step,setStep]=useState("welcome"); const [rolle,setRolle]=useState("schueler");
   const [name,setName]=useState(""); const [pin,setPin]=useState("");
   const [err,setErr]=useState(""); const [load,setLoad]=useState(false);
+  const waehle=r=>{setRolle(r);setErr("");setStep("form");};
   const go=async()=>{
     setErr(""); setLoad(true);
     const nm=name.trim();
-    const {data:fl}=await supabase.from("fahrlehrer_profil").select("*").ilike("name",nm).eq("pin",pin).limit(1);
-    if(fl&&fl.length>0){onLogin({role:fl[0].rolle==="admin"?"admin":"lehrer",profil:fl[0]});return;}
-    if(nm.toLowerCase()==="lehrer"&&pin==="9999"){
-      const {data:sa}=await supabase.from("fahrlehrer_profil").select("*").eq("rolle","lehrer").ilike("name","Saad").limit(1);
-      onLogin({role:"lehrer",profil:(sa&&sa[0])||null});return;
+    if(rolle==="lehrer"){
+      const {data:fl}=await supabase.from("fahrlehrer_profil").select("*").ilike("name",nm).eq("pin",pin).limit(1);
+      if(fl&&fl.length>0){onLogin({role:fl[0].rolle==="admin"?"admin":"lehrer",profil:fl[0]});return;}
+      if(nm.toLowerCase()==="lehrer"&&pin==="9999"){
+        const {data:sa}=await supabase.from("fahrlehrer_profil").select("*").eq("rolle","lehrer").ilike("name","Saad").limit(1);
+        onLogin({role:"lehrer",profil:(sa&&sa[0])||null});return;
+      }
+      setLoad(false);setErr("Name oder PIN falsch.");return;
     }
     const {data,error}=await supabase.from("schueler").select("*").ilike("name",nm).eq("pin",pin).single();
     setLoad(false);
     if(error||!data){setErr("Name oder PIN falsch.");return;}
     onLogin({role:"schueler",schueler:data});
   };
-  const inp={width:"100%",boxSizing:"border-box",background:T.inset,border:`1px solid ${T.sep}`,borderRadius:12,padding:"12px 16px",fontSize:15,color:T.label,outline:"none",fontFamily:F};
-  return (
-    <div style={{minHeight:"100vh",background:"transparent",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,fontFamily:F}}>
-      <div style={{textAlign:"center",marginBottom:40}}>
-        <div style={{width:88,height:88,borderRadius:22,background:T.card,border:`1px solid ${T.glassBorder}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:44,margin:"0 auto 16px"}}>🚗</div>
-        <div style={{fontSize:32,fontWeight:700,color:T.label,letterSpacing:-0.5}}>Fahrlehrer <span style={{color:T.blue}}>Saad</span></div>
-        <div style={{fontSize:15,color:T.label2,marginTop:6}}>Ausbildung · Lernmaterial · Fortschritt</div>
+  const inp={background:"rgba(255,255,255,.08)",border:"1px solid rgba(255,255,255,.15)",borderRadius:14,padding:"15px 16px",color:"#fff",fontSize:16,outline:"none",fontFamily:F,width:"100%",boxSizing:"border-box"};
+  const huelle=inhalt=><div style={{minHeight:"100vh",display:"flex",justifyContent:"center",fontFamily:F}}><div style={{width:"100%",maxWidth:440,minHeight:"100vh",display:"flex",flexDirection:"column"}}>{inhalt}</div></div>;
+
+  if(step==="welcome") return huelle(
+    <div style={{flex:1,display:"flex",flexDirection:"column",padding:"40px 24px 34px",gap:16}}>
+      <div style={{width:64,height:64,borderRadius:18,background:"rgba(255,255,255,.1)",border:"1px solid rgba(255,255,255,.18)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:22,color:"#fff"}}>FS</div>
+      <div style={{marginTop:"auto",fontSize:15,color:"#9DB4F0"}}>Fahrschule Saad</div>
+      <div style={{fontSize:40,lineHeight:1.05,fontWeight:600,letterSpacing:"-.03em",color:"#fff",textWrap:"pretty"}}>Dein Weg zum Führerschein.</div>
+      <div style={{fontSize:16,color:"#C4D3FA",lineHeight:1.45,textWrap:"pretty"}}>Ausbildungsstand, Fahrstunden und Theorie – alles an einem Ort.</div>
+      <div style={{display:"flex",flexDirection:"column",gap:10,marginTop:20}}>
+        <button onClick={()=>waehle("schueler")} style={{border:"none",background:"#fff",color:"#071E66",borderRadius:16,padding:17,fontSize:16,fontWeight:600,cursor:"pointer",fontFamily:F}}>Ich bin Fahrschüler</button>
+        <button onClick={()=>waehle("lehrer")} style={{border:"1px solid rgba(255,255,255,.25)",background:"rgba(255,255,255,.08)",color:"#fff",borderRadius:16,padding:17,fontSize:16,fontWeight:600,cursor:"pointer",fontFamily:F}}>Ich bin Fahrlehrer</button>
       </div>
-      <Card style={{width:"100%",maxWidth:380,padding:28}}>
-        <div style={{fontSize:22,fontWeight:700,color:T.label,marginBottom:22}}>Anmelden</div>
-        <div style={{marginBottom:14}}>
-          <div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:7}}>Name</div>
-          <input value={name} onChange={e=>setName(e.target.value)} placeholder="Vor- und Nachname" onKeyDown={e=>e.key==="Enter"&&go()} style={inp}/>
-        </div>
-        <div style={{marginBottom:22}}>
-          <div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:7}}>PIN</div>
-          <input value={pin} onChange={e=>setPin(e.target.value)} type="password" maxLength={8} onKeyDown={e=>e.key==="Enter"&&go()} style={{...inp,fontSize:22,letterSpacing:6}}/>
-        </div>
-        {err&&<div style={{background:T.dangerBg,color:T.red,borderRadius:10,padding:"10px 14px",fontSize:13,marginBottom:16,border:`1px solid ${T.red}33`}}>{err}</div>}
-        <button onClick={go} disabled={load} style={{width:"100%",background:T.blue,color:"#fff",border:"none",borderRadius:14,padding:14,fontSize:16,fontWeight:600,cursor:"pointer",opacity:load?0.7:1,fontFamily:F}}>{load?"Anmelden...":"Anmelden"}</button>
-      </Card>
+    </div>
+  );
+
+  return huelle(
+    <div style={{flex:1,display:"flex",flexDirection:"column",padding:"20px 24px 34px",gap:14}}>
+      <button onClick={()=>{setStep("welcome");setErr("");}} style={{alignSelf:"flex-start",border:"none",background:"none",color:"#6FA0FF",fontSize:16,padding:"8px 0",cursor:"pointer",fontFamily:F}}>‹ Zurück</button>
+      <div style={{fontSize:30,fontWeight:600,letterSpacing:"-.02em",marginTop:12,color:"#fff"}}>Anmelden</div>
+      <div style={{fontSize:15,color:"#9DB4F0"}}>{rolle==="lehrer"?"Als Fahrlehrer":"Als Fahrschüler"}</div>
+      <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:16}}>
+        <span style={{fontSize:13,color:"#9DB4F0"}}>Name</span>
+        <input value={name} onChange={e=>setName(e.target.value)} placeholder="Vor- und Nachname" onKeyDown={e=>e.key==="Enter"&&go()} style={inp}/>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        <span style={{fontSize:13,color:"#9DB4F0"}}>PIN</span>
+        <input value={pin} onChange={e=>setPin(e.target.value)} type="password" inputMode="numeric" maxLength={8} onKeyDown={e=>e.key==="Enter"&&go()} style={inp}/>
+      </div>
+      {err&&<div style={{fontSize:14,color:"#FFB86B"}}>{err}</div>}
+      <button onClick={go} disabled={load} style={{marginTop:"auto",border:"none",background:"#4C8DFF",color:"#fff",borderRadius:16,padding:17,fontSize:16,fontWeight:600,cursor:"pointer",opacity:load?0.7:1,fontFamily:F}}>{load?"Anmelden...":"Anmelden"}</button>
+      <div style={{textAlign:"center",fontSize:14,color:"#9DB4F0"}}>PIN vergessen? Frag deinen Fahrlehrer.</div>
     </div>
   );
 }
