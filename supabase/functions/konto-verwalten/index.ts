@@ -127,7 +127,8 @@ Deno.serve(async (req) => {
 
       case "migrieren": {
         // Einmalig: bestehende Schüler/Lehrer bekommen ein Konto. Geschützt durch den Einrichtungsschlüssel.
-        const key = Deno.env.get("MIGRATION_KEY");
+        const { data: k } = await admin.from("einrichtung_schluessel").select("wert").eq("name", "migration").maybeSingle();
+        const key = k?.wert || Deno.env.get("MIGRATION_KEY");
         if (!key || body.key !== key) return fehler("Einrichtungsschlüssel falsch.", 403);
         const ergebnis: unknown[] = [];
         for (const [typ, tabelle] of [["lehrer", "fahrlehrer_profil"], ["schueler", "schueler"]] as const) {
