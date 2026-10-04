@@ -145,3 +145,7 @@ Auftragsverarbeitungsverträge (Supabase, Vercel, ggf. GmbH–Betreiber).
 
 ## 2026-10-04 – Startseite mit Foto
 - Anmeldeseite (Willkommen und Anmelden) hat das Fahrschulauto als Hintergrund (public/login-bg.jpg, ca. 1400 px) mit dunkelblauem Verlauf für die Lesbarkeit.
+
+## 2026-10-04 – Balken oben (iPhone-Statusleiste) entfernt
+- index.html: viewport-fit=cover, apple-mobile-web-app-status-bar-style=black-translucent; body padding-top = safe-area-inset-top.
+- App.js: alle minHeight 100dvh abzüglich safe-area (kein unnötiges Scrollen), NavBar klebt unter der Uhr, eingeloggt liegt eine halbtransparente, unscharfe Leiste unter der Uhr (damit Text beim Scrollen nicht mit der Uhr kollidiert). Anmeldeseite: Foto reicht bis ganz oben.
