@@ -83,6 +83,8 @@ const LERN = AUSBILDUNG.flatMap(x=>{
 const ALL = AUSBILDUNG.flatMap(s=>s.gruppen.flatMap(g=>g.items.map(i=>`${s.id}::${g.name}::${i}`)));
 const nxt = v => ((v||0)+1)%3;
 const KLASSEN = ["B","B197","BE","B96"];
+const nKeys=n=>Object.keys(n).filter(k=>{const p=k.split("::");return p.length===2||!n[`${p[0]}::${p[1]}`];});
+const AbmeldenBtn=({onClick})=><button onClick={onClick} style={{background:T.card,border:`1px solid ${T.sep}`,borderRadius:999,padding:"7px 14px",fontSize:13,fontWeight:500,cursor:"pointer",color:T.red,fontFamily:F,flexShrink:0}}>Abmelden</button>;
 const DEFAULT_PROFIL = {name:"Saad",ueber_mich:"Als leidenschaftlicher Fahrlehrer in Münster helfe ich meinen Schülern, sicher und selbstbewusst ans Steuer zu kommen.",tags:["Klasse B","BE","10+ Jahre"]};
 const EMPTY_SET = new Set();
 
@@ -114,7 +116,7 @@ const Ring = ({pct,size=72,stroke=6}) => {
 
 const TabBar = ({active,onChange,isLehrer,tabsOverride}) => {
   const tabs = tabsOverride ? tabsOverride : isLehrer
-    ? [{id:"home",e:"🏠",l:"Home"},{id:"schueler",e:"👥",l:"Schüler"},{id:"material",e:"📚",l:"Lernen"},{id:"profil",e:"👨‍🏫",l:"Profil"}]
+    ? [{id:"home",e:"🏠",l:"Home"},{id:"schueler",e:"👥",l:"Schüler"},{id:"material",e:"📚",l:"Lernen"},{id:"profil",e:"🏫",l:"Fahrschule"}]
     : [{id:"home",e:"🏠",l:"Home"},{id:"diagramm",e:"📊",l:"Diagramm"},{id:"lernen",e:"📚",l:"Lernen"},{id:"profil",e:"🏫",l:"Fahrschule"}];
   return (
     <div style={{position:"fixed",bottom:0,left:0,right:0,height:83,background:T.tabBg,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",borderTop:`1px solid ${T.tabBorder}`,display:"flex",alignItems:"flex-start",justifyContent:"space-around",padding:"10px 0 0",zIndex:999,fontFamily:F}}>
@@ -247,6 +249,11 @@ function LehrerApp({onLogout,profil}) {
   const [meine,setMeine]=useState(()=>new Set());
   const [filter,setFilter]=useState("aktiv");
   const [meineFehler,setMeineFehler]=useState("");
+  const [fahrlehrer,setFahrlehrer]=useState([]); const [standorte,setStandorte]=useState([]);
+  useEffect(()=>{
+    supabase.from("fahrlehrer_profil").select("id,name,ueber_mich,tags,bild_url,erstellt_am").eq("rolle","lehrer").order("erstellt_am").then(r=>setFahrlehrer(r.data||[]));
+    supabase.from("standorte").select("*").order("erstellt_am").then(r=>setStandorte(r.data||[]));
+  },[]);
 
   const ladeListe=useCallback(async()=>{
     const[a,b]=await Promise.all([
@@ -290,22 +297,25 @@ function LehrerApp({onLogout,profil}) {
   if(screen?.type==="neu") return <div style={{fontFamily:F,background:"transparent",minHeight:"100dvh"}}><NavBar title="Neuer Schüler" onBack={()=>setScreen(null)}/><NeuerS alsMeine={!!screen.meine} profilId={pid} onSaved={()=>{ladeListe();setScreen(null);}}/></div>;
 
   const tabs={
-    home:<LehrerHome liste={liste} aktiv={aktiv} archiv={archiv} meineListe={meineListe} onOpen={openS} onNeu={()=>setScreen({type:"neu",meine:true})} onAlle={f=>{setFilter(f);setTab("schueler");}}/>,
+    home:<LehrerHome liste={liste} aktiv={aktiv} archiv={archiv} meineListe={meineListe} onOpen={openS} onNeu={()=>setScreen({type:"neu",meine:true})} onAlle={f=>{setFilter(f);setTab("schueler");}} onLogout={onLogout}/>,
     schueler:<SListe aktiv={aktiv} archiv={archiv} meine={meine} onMeine={setMeineFlag} fehler={meineFehler} filter={filter} setFilter={setFilter} onOpen={openS} onNeu={()=>setScreen({type:"neu"})} onRefresh={ladeListe}/>,
     material:<MatListe mat={mat} onOpen={k=>setScreen({type:"m",k,back:null})}/>,
-    profil:<Profil onLogout={onLogout} isLehrer profil={profil}/>,
+    profil:<Profil selbst fahrlehrer={fahrlehrer} meineIds={pid?[pid]:[]} standorte={standorte}/>,
   };
 
   return <div style={{fontFamily:F,background:"transparent",minHeight:"100dvh"}}><div style={{paddingBottom:83}}>{tabs[tab]}</div><TabBar active={tab} onChange={setTab} isLehrer/></div>;
 }
 
 // ── LEHRER HOME ─────────────────────────────────────
-function LehrerHome({liste,aktiv,archiv,meineListe,onOpen,onNeu,onAlle}) {
+function LehrerHome({liste,aktiv,archiv,meineListe,onOpen,onNeu,onAlle,onLogout}) {
   return (
     <div style={{background:"transparent",minHeight:"100dvh",padding:"20px 16px 0"}}>
-      <div style={{marginBottom:24}}>
-        <div style={{fontSize:11,color:T.blue,fontWeight:700,letterSpacing:1,marginBottom:2,fontFamily:F}}>FAHRLEHRER SAAD</div>
-        <div style={{fontSize:28,fontWeight:600,color:T.label,letterSpacing:-0.56,fontFamily:F}}>Dashboard</div>
+      <div style={{marginBottom:24,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
+        <div>
+          <div style={{fontSize:11,color:T.blue,fontWeight:700,letterSpacing:1,marginBottom:2,fontFamily:F}}>FAHRLEHRER SAAD</div>
+          <div style={{fontSize:28,fontWeight:600,color:T.label,letterSpacing:-0.56,fontFamily:F}}>Dashboard</div>
+        </div>
+        <AbmeldenBtn onClick={onLogout}/>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:24}}>
         {[{v:aktiv.length,l:"Aktiv",c:T.green,e:"🎯",f:"aktiv"},{v:meineListe.length,l:"Meine Schüler",c:T.blue,e:"👥",f:"meine"},{v:archiv.length,l:"Archiv",c:T.gray,e:"📦",f:"archiv"}].map((x,i)=>(
@@ -440,24 +450,27 @@ function SRowFull({s,istMeine,onClick,onSA,onDel,onSwipeLeft,onSwipeRight,labelL
 
 // ── NEUER SCHÜLER ───────────────────────────────────
 function NeuerS({onSaved,alsMeine,profilId}) {
-  const [f,setF]=useState({name:"",pin:""}); const [err,setErr]=useState(""); const [saving,setSaving]=useState(false); const [ok,setOk]=useState(null);
+  const [f,setF]=useState({name:"",pin:"",klassen:[],sehhilfe:"Keine",theorie:false}); const [err,setErr]=useState(""); const [saving,setSaving]=useState(false); const [ok,setOk]=useState(null);
   const go=async()=>{
     if(!f.name.trim()){setErr("Namen eingeben.");return;} if(f.pin.length<4){setErr("PIN mind. 4 Stellen.");return;}
     setSaving(true);
     const{data,error}=await supabase.from("schueler").insert({name:f.name.trim(),pin:f.pin,status:"aktiv"}).select().single();
     setSaving(false);
     if(error){setErr("Fehler: "+error.message);return;}
-    await supabase.from("schueler_info").insert({schueler_id:data.id,klassen:[],sehhilfe:"Keine",theorie:false,fahrlehrer:""});
+    await supabase.from("schueler_info").insert({schueler_id:data.id,klassen:f.klassen,sehhilfe:f.sehhilfe,theorie:f.theorie,fahrlehrer:""});
     if(alsMeine&&profilId) await supabase.from("meine_schueler").insert({fahrlehrer_id:profilId,schueler_id:String(data.id)});
-    setOk({name:f.name.trim(),pin:f.pin}); onSaved();
+    setOk({name:f.name.trim(),pin:f.pin});
   };
-  if(ok) return <div style={{padding:"48px 20px",textAlign:"center",fontFamily:F}}><div style={{fontSize:64,marginBottom:16}}>🎉</div><div style={{fontSize:24,fontWeight:700,color:T.label,marginBottom:16}}>Schüler angelegt!</div><Card style={{padding:20,textAlign:"left"}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><span style={{color:T.label2}}>Name</span><span style={{fontWeight:600}}>{ok.name}</span></div><div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:T.label2}}>PIN</span><span style={{fontWeight:700,fontSize:22,letterSpacing:4,color:T.blue}}>{ok.pin}</span></div></Card></div>;
+  if(ok) return <div style={{padding:"48px 20px",textAlign:"center",fontFamily:F}}><div style={{fontSize:64,marginBottom:16}}>🎉</div><div style={{fontSize:24,fontWeight:700,color:T.label,marginBottom:16}}>Schüler angelegt!</div><Card style={{padding:20,textAlign:"left"}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><span style={{color:T.label2}}>Name</span><span style={{fontWeight:600}}>{ok.name}</span></div><div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:T.label2}}>PIN</span><span style={{fontWeight:700,fontSize:22,letterSpacing:4,color:T.blue}}>{ok.pin}</span></div></Card><button onClick={onSaved} style={{width:"100%",marginTop:16,background:T.blue,color:"#fff",border:"none",borderRadius:14,padding:14,fontSize:16,fontWeight:600,cursor:"pointer",fontFamily:F}}>Fertig</button></div>;
   return (
     <div style={{padding:"20px 16px",fontFamily:F}}>
       <Card style={{padding:24}}>
         <div style={{fontSize:20,fontWeight:700,color:T.label,marginBottom:20}}>Neuer Schüler</div>
         <div style={{marginBottom:14}}><div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:7}}>Vor- und Nachname *</div><input style={{width:"100%",boxSizing:"border-box",background:T.inset,border:`1px solid ${T.sep}`,borderRadius:12,padding:"12px 16px",fontSize:15,color:T.label,outline:"none",fontFamily:F}} value={f.name} onChange={e=>setF({...f,name:e.target.value})} placeholder="z.B. Max Mustermann"/></div>
         <div style={{marginBottom:20}}><div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:7}}>PIN (mind. 4 Stellen) *</div><input style={{width:"100%",boxSizing:"border-box",background:T.inset,border:`1px solid ${T.sep}`,borderRadius:12,padding:"12px 16px",fontSize:22,color:T.label,outline:"none",letterSpacing:6,fontFamily:F}} type="password" maxLength={8} value={f.pin} onChange={e=>setF({...f,pin:e.target.value.replace(/\D/g,"")})}/><div style={{fontSize:12,color:T.label2,marginTop:6}}>💡 PIN persönlich mitteilen</div></div>
+        <div style={{marginBottom:14}}><div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:8}}>Fahrerlaubnisklassen (optional)</div><div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{KLASSEN.map(k=>{const sel=f.klassen.includes(k);return <button key={k} onClick={()=>setF({...f,klassen:sel?f.klassen.filter(x=>x!==k):[...f.klassen,k]})} style={{padding:"8px 16px",borderRadius:999,border:`1px solid ${sel?T.blue:T.sep}`,background:sel?`${T.blue}18`:"transparent",color:sel?T.blue:T.label2,cursor:"pointer",fontSize:13,fontWeight:600,fontFamily:F}}>{k}</button>;})}</div></div>
+        <div style={{marginBottom:14}}><div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:8}}>Sehhilfe (optional)</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>{["Keine","Brille"].map(o=><button key={o} onClick={()=>setF({...f,sehhilfe:o})} style={{padding:"10px",borderRadius:12,border:`1px solid ${f.sehhilfe===o?T.blue:T.sep}`,background:f.sehhilfe===o?`${T.blue}18`:"transparent",color:f.sehhilfe===o?T.blue:T.label2,cursor:"pointer",fontSize:14,fontFamily:F}}>{o}</button>)}</div></div>
+        <div style={{marginBottom:20}}><div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:8}}>Theorie (optional)</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>{[{l:"⏳ Ausstehend",v:false},{l:"✅ Bestanden",v:true}].map(o=><button key={String(o.v)} onClick={()=>setF({...f,theorie:o.v})} style={{padding:"10px",borderRadius:12,border:`1px solid ${f.theorie===o.v?(o.v?T.green:T.red):T.sep}`,background:f.theorie===o.v?(o.v?`${T.green}18`:`${T.red}18`):"transparent",color:f.theorie===o.v?(o.v?T.green:T.red):T.label2,cursor:"pointer",fontSize:13,fontFamily:F}}>{o.l}</button>)}</div></div>
         {err&&<div style={{background:T.dangerBg,color:T.red,borderRadius:10,padding:"10px 14px",fontSize:13,marginBottom:14}}>{err}</div>}
         <button onClick={go} disabled={saving} style={{width:"100%",background:T.blue,color:"#fff",border:"none",borderRadius:14,padding:14,fontSize:16,fontWeight:600,cursor:"pointer",opacity:saving?0.7:1,fontFamily:F}}>{saving?"Speichern...":"✓ Schüler anlegen"}</button>
       </Card>
@@ -517,12 +530,12 @@ function DiagrammView({s,mat,setMat,onMat,isLehrer,startStufe,adminEdit}) {
       {Object.keys(naechstes).length>0&&(
         <div style={{background:`${T.blue}10`,border:`1px solid ${T.blue}30`,borderRadius:16,padding:14,marginBottom:14}}>
           <div style={{fontSize:11,color:T.blue,fontWeight:700,letterSpacing:0.8,marginBottom:10}}>📍 ALS NÄCHSTES GEPLANT</div>
-          {Object.keys(naechstes).map(k=>{
+          {nKeys(naechstes).map(k=>{
             const p=k.split("::");const so=AUSBILDUNG.find(x=>x.id===p[0]);const mk=`${p[0]}::${p[1]}`;
             const hm=mat&&mat[mk]&&(mat[mk].videoUrl||mat[mk].fotos?.length>0||mat[mk].quiz?.length>0);
             return <div key={k} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:`1px solid ${T.blue}20`}}>
               <span style={{fontSize:18}}>{so?.icon||"📍"}</span>
-              <div style={{flex:1}}><div style={{fontSize:14,fontWeight:600,color:T.label}}>{p[2]}</div><div style={{fontSize:12,color:T.label2}}>{so?.label} · {p[1]}</div></div>
+              <div style={{flex:1}}><div style={{fontSize:14,fontWeight:600,color:T.label}}>{p.length===2?p[1]:p[2]}</div><div style={{fontSize:12,color:T.label2}}>{so?.label}{p.length===2?" · ganze Kategorie":" · "+p[1]}</div></div>
               {hm&&onMat&&<button onClick={()=>onMat(mk)} style={{background:T.blue,color:"#fff",border:"none",borderRadius:999,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:F}}>📚</button>}
             </div>;
           })}
@@ -558,6 +571,7 @@ function DiagrammView({s,mat,setMat,onMat,isLehrer,startStufe,adminEdit}) {
               <div style={{padding:"13px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:`1px solid ${T.sep}`}}>
                 <span style={{fontSize:15,fontWeight:600,color:T.label,fontFamily:F}}>{g.name}</span>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  {isLehrer&&<button onClick={()=>toggleN(mk)} style={{background:"none",border:"none",cursor:"pointer",fontSize:16,opacity:naechstes[mk]?1:0.25,padding:0,flexShrink:0}}>📍</button>}
                   {(hm||adminEdit)&&<button onClick={()=>onMat&&onMat(mk)} style={{background:hm?`${T.blue}18`:`${T.gray}10`,color:hm?T.blue:T.gray,border:`1px solid ${hm?T.blue+"30":T.sep}`,borderRadius:999,padding:"4px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:F}}>{hm?"📚 Material":"+ Material"}</button>}
                   <span style={{fontSize:12,color:T.label2}}>{gb}/{g.items.length}</span>
                 </div>
@@ -918,16 +932,8 @@ const StandortDetail = ({o}) => (
   </div>
 );
 
-function Profil({onLogout,isLehrer,profil,fahrlehrer=[],meineIds=[],standorte=[]}) {
+function Profil({selbst,fahrlehrer=[],meineIds=[],standorte=[]}) {
   const [detail,setDetail]=useState(null);
-  const abmelden=<button onClick={onLogout} style={{width:"100%",background:T.card,backdropFilter:"blur(20px)",border:`1px solid ${T.sep}`,borderRadius:14,padding:"14px",fontSize:16,fontWeight:500,cursor:"pointer",color:T.red,fontFamily:F,marginBottom:24}}>Abmelden</button>;
-  if(isLehrer) return (
-    <div style={{background:"transparent",minHeight:"100dvh",padding:"20px 16px 0",fontFamily:F}}>
-      <div style={{fontSize:28,fontWeight:600,color:T.label,letterSpacing:-0.56,marginBottom:16}}>Mein Profil</div>
-      <ProfilKarte p={profil||DEFAULT_PROFIL}/>
-      {abmelden}
-    </div>
-  );
   if(detail) return (
     <div style={{fontFamily:F,background:"transparent",minHeight:"100dvh",paddingBottom:100}}>
       <NavBar title={detail.typ==="so"?detail.p.name:`Fahrlehrer ${detail.p.name}`} onBack={()=>setDetail(null)}/>
@@ -938,7 +944,7 @@ function Profil({onLogout,isLehrer,profil,fahrlehrer=[],meineIds=[],standorte=[]
   const eigene=meineIds.map(id=>byId.get(id)).filter(Boolean);
   const rest=fahrlehrer.filter(f=>!meineIds.includes(f.id));
   const kacheln=[
-    ...eigene.map((p,i)=>({p,label:i===0?"Dein Fahrlehrer":i===1?"Dein zweiter Fahrlehrer":"Dein weiterer Fahrlehrer"})),
+    ...eigene.map((p,i)=>({p,label:selbst?"Du":i===0?"Dein Fahrlehrer":i===1?"Dein zweiter Fahrlehrer":"Dein weiterer Fahrlehrer"})),
     ...rest.map((p,i)=>({p,label:i===0&&eigene.length>0?"Weitere Fahrlehrer":null})),
   ];
   if(kacheln.length===0) kacheln.push({p:DEFAULT_PROFIL,label:null});
@@ -954,7 +960,6 @@ function Profil({onLogout,isLehrer,profil,fahrlehrer=[],meineIds=[],standorte=[]
         <div style={lab}>Fahrlehrer</div>
         <div style={{display:"flex",flexDirection:"column",gap:8}}>{kacheln.map((k,i)=><FahrlehrerKachel key={k.p.id||i} p={k.p} label={k.label} onClick={()=>setDetail({typ:"fl",p:k.p})}/>)}</div>
       </div>
-      {abmelden}
     </div>
   );
 }
@@ -995,15 +1000,15 @@ function AdminApp({onLogout}) {
   if(screen?.type==="neu") return seite("Neuer Schüler",()=>setScreen(null),<NeuerS alsMeine={false} onSaved={()=>{ladeListe();setScreen(null);}}/>);
 
   const inhalt={
-    dashboard:<AdminDashboard/>,
+    dashboard:<AdminDashboard onLogout={onLogout}/>,
     schueler:<SListe aktiv={aktiv} archiv={archiv} meine={EMPTY_SET} onMeine={async()=>null} ohneMeine filter={filter} setFilter={setFilter} onOpen={s=>setScreen({type:"s",s})} onNeu={()=>setScreen({type:"neu"})} onRefresh={ladeListe}/>,
     lernen:<MatListe mat={mat} onOpen={k=>setScreen({type:"m",k,back:null})}/>,
-    fahrschule:<AdminFahrschule onLogout={onLogout}/>,
+    fahrschule:<AdminFahrschule/>,
   };
   return <div style={{fontFamily:F,background:"transparent",minHeight:"100dvh"}}><div style={{paddingBottom:83}}>{inhalt[tab]}</div><TabBar active={tab} onChange={setTab} tabsOverride={ADMIN_TABS}/></div>;
 }
 
-function AdminDashboard() {
+function AdminDashboard({onLogout}) {
   const [text,setText]=useState(""); const [bild,setBild]=useState(""); const [busy,setBusy]=useState(false);
   const [fehler,setFehler]=useState(""); const [liste,setListe]=useState([]);
   const laden=useCallback(async()=>{
@@ -1032,9 +1037,12 @@ function AdminDashboard() {
   };
   return (
     <div style={{background:"transparent",minHeight:"100dvh",padding:"20px 16px 0",fontFamily:F}}>
-      <div style={{marginBottom:24}}>
-        <div style={{fontSize:11,color:T.blue,fontWeight:700,letterSpacing:1,marginBottom:2}}>ADMIN</div>
-        <div style={{fontSize:28,fontWeight:600,color:T.label,letterSpacing:-0.56}}>Dashboard</div>
+      <div style={{marginBottom:24,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
+        <div>
+          <div style={{fontSize:11,color:T.blue,fontWeight:700,letterSpacing:1,marginBottom:2}}>ADMIN</div>
+          <div style={{fontSize:28,fontWeight:600,color:T.label,letterSpacing:-0.56}}>Dashboard</div>
+        </div>
+        <AbmeldenBtn onClick={onLogout}/>
       </div>
       <Card style={{padding:18,marginBottom:20}}>
         <div style={{fontSize:15,fontWeight:600,color:T.label,marginBottom:12}}>Neue Meldung für alle Schüler</div>
@@ -1065,7 +1073,7 @@ function AdminDashboard() {
   );
 }
 
-function AdminFahrschule({onLogout}) {
+function AdminFahrschule() {
   const [fl,setFl]=useState([]); const [so,setSo]=useState([]); const [screen,setScreen]=useState(null); const [fehler,setFehler]=useState("");
   const laden=useCallback(async()=>{
     const[a,b]=await Promise.all([
@@ -1128,7 +1136,6 @@ function AdminFahrschule({onLogout}) {
           </Card>
         ))}
       </div>
-      <button onClick={onLogout} style={{width:"100%",background:T.card,backdropFilter:"blur(20px)",border:`1px solid ${T.sep}`,borderRadius:14,padding:"14px",fontSize:16,fontWeight:500,cursor:"pointer",color:T.red,fontFamily:F,marginBottom:24}}>Abmelden</button>
     </div>
   );
 }
@@ -1239,7 +1246,7 @@ function SchuelerApp({schueler,onLogout}) {
   const [mat,setMat]=useState({}); const [screen,setScreen]=useState(null);
   const [selStufe,setSelStufe]=useState(null); const [load,setLoad]=useState(true);
   const [fahrlehrer,setFahrlehrer]=useState([]); const [meineIds,setMeineIds]=useState([]);
-  const [meldungen,setMeldungen]=useState([]); const [standorte,setStandorte]=useState([]);
+  const [meldungen,setMeldungen]=useState([]); const [standorte,setStandorte]=useState([]); const [fsBild,setFsBild]=useState(null);
 
   useEffect(()=>{
     const l=async()=>{
@@ -1276,10 +1283,17 @@ function SchuelerApp({schueler,onLogout}) {
 
     if(tab==="home") return (
       <div style={{background:"transparent",minHeight:"100dvh",padding:"20px 16px 0",fontFamily:F}}>
-        <div style={{marginBottom:20}}>
-          <div style={{fontSize:11,color:T.blue,fontWeight:700,letterSpacing:1}}>FAHRLEHRER SAAD</div>
-          <div style={{fontSize:28,fontWeight:600,color:T.label,letterSpacing:-0.56,fontFamily:F}}>Hallo, {schueler.name.split(" ")[0]}! 👋</div>
+        <div style={{marginBottom:20,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
+          <div>
+            <div style={{fontSize:11,color:T.blue,fontWeight:700,letterSpacing:1}}>FAHRLEHRER SAAD</div>
+            <div style={{fontSize:28,fontWeight:600,color:T.label,letterSpacing:-0.56,fontFamily:F}}>Hallo, {schueler.name.split(" ")[0]}! 👋</div>
+          </div>
+          <AbmeldenBtn onClick={onLogout}/>
         </div>
+        {Object.keys(naechstes).length>0&&<div style={{background:`${T.blue}10`,border:`1px solid ${T.blue}30`,borderRadius:20,padding:16,marginBottom:14}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}><span style={{fontSize:18}}>📍</span><div style={{fontSize:15,fontWeight:700,color:T.blue,fontFamily:F}}>Als nächstes geplant</div><span style={{background:`${T.blue}18`,color:T.blue,borderRadius:999,padding:"2px 8px",fontSize:11,fontWeight:700,marginLeft:"auto"}}>{nKeys(naechstes).length}</span></div>
+          {nKeys(naechstes).map(k=>{const p=k.split("::");const so=AUSBILDUNG.find(x=>x.id===p[0]);const mk=`${p[0]}::${p[1]}`;const hm=mat&&mat[mk]&&(mat[mk].videoUrl||mat[mk].fotos?.length>0||mat[mk].quiz?.length>0);return <Card key={k} style={{padding:"12px 14px",marginBottom:8}}><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:hm?10:0}}><span style={{fontSize:20}}>{so?.icon||"📍"}</span><div style={{flex:1}}><div style={{fontSize:14,fontWeight:600,color:T.label,fontFamily:F}}>{p.length===2?p[1]:p[2]}</div><div style={{fontSize:12,color:T.label2,fontFamily:F}}>{so?.label}{p.length===2?" · ganze Kategorie":" · "+p[1]}</div></div></div>{hm&&<button onClick={()=>setScreen({type:"mat",k:mk})} style={{width:"100%",background:`${T.blue}15`,color:T.blue,border:`1px solid ${T.blue}30`,borderRadius:12,padding:"9px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:F}}>📚 Lernmaterial ansehen</button>}</Card>;})}
+        </div>}
         <Card style={{padding:20,marginBottom:14}}>
           <div style={{fontSize:11,fontWeight:700,color:T.label2,letterSpacing:0.8,textTransform:"uppercase",marginBottom:12}}>Mein Fortschritt</div>
           <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:16}}>
@@ -1294,17 +1308,12 @@ function SchuelerApp({schueler,onLogout}) {
 
         {meldungen.length>0&&<div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:14}}>
           {meldungen.map(m=><Card key={m.id} style={{overflow:"hidden"}}>
-            {m.bild_url&&<img src={m.bild_url} alt="" style={{width:"100%",maxHeight:260,objectFit:"cover",display:"block"}}/>}
+            {m.bild_url&&<img src={m.bild_url} alt="" onClick={()=>setFsBild(m.bild_url)} style={{width:"100%",maxHeight:260,objectFit:"cover",display:"block",cursor:"pointer"}}/>}
             <div style={{padding:16}}>
               {m.text&&<div style={{fontSize:15,color:T.label,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{m.text}</div>}
               <div style={{fontSize:11,color:T.label2,marginTop:m.text?8:0}}>{new Date(m.erstellt_am).toLocaleDateString("de-DE",{day:"2-digit",month:"long",year:"numeric"})}</div>
             </div>
           </Card>)}
-        </div>}
-
-        {Object.keys(naechstes).length>0&&<div style={{background:`${T.blue}10`,border:`1px solid ${T.blue}30`,borderRadius:20,padding:16,marginBottom:14}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}><span style={{fontSize:18}}>📍</span><div style={{fontSize:15,fontWeight:700,color:T.blue,fontFamily:F}}>Als nächstes geplant</div><span style={{background:`${T.blue}18`,color:T.blue,borderRadius:999,padding:"2px 8px",fontSize:11,fontWeight:700,marginLeft:"auto"}}>{Object.keys(naechstes).length}</span></div>
-          {Object.keys(naechstes).map(k=>{const p=k.split("::");const so=AUSBILDUNG.find(x=>x.id===p[0]);const mk=`${p[0]}::${p[1]}`;const hm=mat&&mat[mk]&&(mat[mk].videoUrl||mat[mk].fotos?.length>0||mat[mk].quiz?.length>0);return <Card key={k} style={{padding:"12px 14px",marginBottom:8}}><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:hm?10:0}}><span style={{fontSize:20}}>{so?.icon||"📍"}</span><div style={{flex:1}}><div style={{fontSize:14,fontWeight:600,color:T.label,fontFamily:F}}>{p[2]}</div><div style={{fontSize:12,color:T.label2,fontFamily:F}}>{so?.label} · {p[1]}</div></div></div>{hm&&<button onClick={()=>setScreen({type:"mat",k:mk})} style={{width:"100%",background:`${T.blue}15`,color:T.blue,border:`1px solid ${T.blue}30`,borderRadius:12,padding:"9px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:F}}>📚 Lernmaterial ansehen</button>}</Card>;})}
         </div>}
 
         {notizen.length>0&&<div style={{background:"rgba(255,184,107,0.14)",border:"1px solid rgba(255,184,107,0.3)",borderRadius:20,padding:"14px 16px",marginBottom:14}}><div style={{fontSize:11,fontWeight:700,color:T.orange,letterSpacing:0.8,textTransform:"uppercase",marginBottom:8}}>Letzte Notiz</div><div style={{fontSize:14,color:"#FFD9AE",lineHeight:1.6}}>{notizen[0].text}</div></div>}
@@ -1320,13 +1329,14 @@ function SchuelerApp({schueler,onLogout}) {
 
     if(tab==="lernen") return <MatListe mat={mat} themen={themen} nurMitMaterial onOpen={k=>setScreen({type:"mat",k})}/>;
 
-    if(tab==="profil") return <Profil onLogout={onLogout} isLehrer={false} fahrlehrer={fahrlehrer} meineIds={meineIds} standorte={standorte}/>;
+    if(tab==="profil") return <Profil fahrlehrer={fahrlehrer} meineIds={meineIds} standorte={standorte}/>;
     return null;
   };
 
   return (
     <div style={{fontFamily:F,background:"transparent",minHeight:"100dvh"}}>
       {screen?renderTab():<><div style={{paddingBottom:83}}>{renderTab()}</div><TabBar active={tab} onChange={setTab} isLehrer={false}/></>}
+      {fsBild&&<FullScreen fotos={[fsBild]} start={0} onClose={()=>setFsBild(null)}/>}
     </div>
   );
 }
