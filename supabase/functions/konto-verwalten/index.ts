@@ -18,7 +18,10 @@ function slug(n: string) {
   return n.toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss")
     .normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "");
 }
-const zufallsPin = () => String(Math.floor(100000 + Math.random() * 900000));
+const zufallsPin = () => {
+  const a = new Uint32Array(1); crypto.getRandomValues(a);
+  return String(100000 + (a[0] % 900000));
+};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
@@ -62,9 +65,10 @@ Deno.serve(async (req) => {
       case "schueler_anlegen": {
         if (!istStaff) return fehler("Keine Berechtigung.", 403);
         if (!body.name?.trim()) return fehler("Namen eingeben.");
-        if (!pinOk(body.pin)) return fehler("PIN muss 6 bis 8 Ziffern haben.");
+        const pin = body.pin ? String(body.pin) : zufallsPin();
+        if (!pinOk(pin)) return fehler("PIN muss 6 bis 8 Ziffern haben.");
         const login = await freierLoginName("schueler", body.name);
-        const authId = await authAnlegen("schueler", login, body.pin);
+        const authId = await authAnlegen("schueler", login, pin);
         const { data: s, error } = await admin.from("schueler")
           .insert({ name: body.name.trim(), status: "aktiv", auth_id: authId, login_name: login }).select().single();
         if (error) { await admin.auth.admin.deleteUser(authId); return fehler("Fehler: " + error.message, 500); }
@@ -76,7 +80,7 @@ Deno.serve(async (req) => {
         if (body.alsMeine && caller) {
           await admin.from("meine_schueler").insert({ fahrlehrer_id: caller.id, schueler_id: String(s.id) });
         }
-        return antwort({ ok: true, id: s.id, login_name: login });
+        return antwort({ ok: true, id: s.id, login_name: login, pin });
       }
 
       case "lehrer_anlegen": {
