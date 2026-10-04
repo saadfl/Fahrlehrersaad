@@ -97,6 +97,22 @@ mit dem öffentlichen Schlüssel lesbar, inkl. Klartext-PINs und Gesundheitsdatu
 
 ---
 
+## 2026-10-04 – Löschfrist für Ausbildungsdaten (5 Jahre nach Abschluss)
+
+**Entscheidung:** Beim Archivieren/Abschließen speichert die App das Datum
+(`schueler.abgeschlossen_am`). Im Admin-Dashboard listet „Zur Löschung fällig" Schüler,
+deren Abschluss über 5 Jahre zurückliegt; Löschen manuell per Bestätigung (löscht Konto
+und alle Daten über die Edge Function). Kein automatisches Löschen.
+
+**Begründung:** § 6 Abs. 2 FahrlG-DV: Ausbildungsnachweis-Daten sind fünf Jahre nach
+Abschluss der Ausbildung zu löschen. Die Rechtsauskunft stammt aus einer
+Zusammenfassung (JuraForum) und ist noch am Gesetzestext zu prüfen. Bestehende
+archivierte Schüler wurden mit dem Migrationsdatum als Abschlussdatum versehen.
+
+**Beteiligt:** Claude (Vorschlag, Umsetzung), Nutzer (Entscheidung für Umsetzung)
+
+---
+
 ## [Datum] – [Titel des nächsten Bausteins]
 
 **Entscheidung:**

@@ -392,7 +392,7 @@ function SListe({aktiv,archiv,meine,onMeine,fehler,filter:filterProp,setFilter,o
   const timer=useRef(null);
   const zeigeToast=(t,ms=5000)=>{setToast(t);clearTimeout(timer.current);timer.current=setTimeout(()=>setToast(null),ms);};
   useEffect(()=>()=>clearTimeout(timer.current),[]);
-  const statusAendern=async(id,st)=>{await supabase.from("schueler").update({status:st}).eq("id",id);onRefresh();};
+  const statusAendern=async(id,st)=>{const zu=["archiviert","abgeschlossen"].includes(st);await supabase.from("schueler").update({status:st,abgeschlossen_am:zu?new Date().toISOString():null}).eq("id",id);onRefresh();};
   const loeschen=async(id)=>{await kontoFn({aktion:"konto_loeschen",typ:"schueler",id});onRefresh();};
 
   const meineListe=aktiv.filter(s=>meine.has(String(s.id)));
@@ -1039,6 +1039,18 @@ function AdminApp({onLogout}) {
 function AdminDashboard({onLogout}) {
   const [text,setText]=useState(""); const [bild,setBild]=useState(""); const [busy,setBusy]=useState(false);
   const [fehler,setFehler]=useState(""); const [liste,setListe]=useState([]);
+  const [faellig,setFaellig]=useState([]);
+  const ladeFaellig=useCallback(async()=>{
+    const grenze=new Date();grenze.setFullYear(grenze.getFullYear()-5);
+    const {data}=await supabase.from("schueler").select("id,name,abgeschlossen_am").in("status",["archiviert","abgeschlossen"]).lt("abgeschlossen_am",grenze.toISOString()).order("abgeschlossen_am");
+    setFaellig(data||[]);
+  },[]);
+  useEffect(()=>{ladeFaellig();},[ladeFaellig]);
+  const faelligLoeschen=async x=>{
+    if(!window.confirm(x.name+" und alle Daten endgültig löschen? Das kann nicht rückgängig gemacht werden."))return;
+    const {error}=await kontoFn({aktion:"konto_loeschen",typ:"schueler",id:x.id});
+    if(error)setFehler("Fehler: "+error);else ladeFaellig();
+  };
   const laden=useCallback(async()=>{
     const {data,error}=await supabase.from("meldungen").select("*").order("erstellt_am",{ascending:false});
     if(error)setFehler("Meldungen konnten nicht geladen werden: "+error.message);else setListe(data||[]);
@@ -1097,6 +1109,14 @@ function AdminDashboard({onLogout}) {
           </div>
         </Card>)}
       </div>
+      <div style={{fontSize:11,color:T.label2,fontWeight:700,letterSpacing:0.8,textTransform:"uppercase",marginBottom:12}}>Zur Löschung fällig</div>
+      <Card style={{padding:16,marginBottom:24}}>
+        <div style={{fontSize:13,color:T.label2,lineHeight:1.5,marginBottom:faellig.length?12:0}}>Ausbildungsdaten sind 5 Jahre nach Abschluss der Ausbildung zu löschen (§ 6 FahrlG-DV).{faellig.length===0&&" Aktuell ist nichts fällig."}</div>
+        {faellig.map(x=><div key={x.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"10px 0",borderTop:`1px solid ${T.sep}`}}>
+          <div><div style={{fontSize:15,color:T.label}}>{x.name}</div><div style={{fontSize:12,color:T.label2}}>Abschluss: {new Date(x.abgeschlossen_am).toLocaleDateString("de-DE")}</div></div>
+          <button onClick={()=>faelligLoeschen(x)} style={{background:T.dangerBg,color:T.red,border:`1px solid ${T.red}66`,borderRadius:10,padding:"7px 14px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:F}}>Löschen</button>
+        </div>)}
+      </Card>
     </div>
   );
 }
