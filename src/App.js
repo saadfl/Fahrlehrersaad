@@ -193,7 +193,7 @@ function Login({onLogin}) {
     onLogin({role:"schueler",schueler:data});
   };
   const inp={background:"rgba(255,255,255,.08)",border:"1px solid rgba(255,255,255,.15)",borderRadius:14,padding:"15px 16px",color:"#fff",fontSize:16,outline:"none",fontFamily:F,width:"100%",boxSizing:"border-box"};
-  const huelle=inhalt=><div style={{minHeight:"100vh",display:"flex",justifyContent:"center",fontFamily:F}}><div style={{width:"100%",maxWidth:440,minHeight:"100vh",display:"flex",flexDirection:"column"}}>{inhalt}</div></div>;
+  const huelle=inhalt=><div style={{minHeight:"100dvh",display:"flex",justifyContent:"center",fontFamily:F}}><div style={{width:"100%",maxWidth:440,minHeight:"100dvh",display:"flex",flexDirection:"column"}}>{inhalt}</div></div>;
 
   if(step==="welcome") return huelle(
     <div style={{flex:1,display:"flex",flexDirection:"column",padding:"40px 24px 34px",gap:16}}>
@@ -285,9 +285,9 @@ function LehrerApp({onLogout,profil}) {
   const archiv=liste.filter(s=>["archiviert","abgeschlossen"].includes(s.status||"aktiv"));
   const meineListe=aktiv.filter(s=>meine.has(String(s.id)));
 
-  if(screen?.type==="s") return <div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}><NavBar title={screen.s.name} onBack={()=>{setScreen(null);ladeListe();}}/><div style={{paddingBottom:20}}><DiagrammView s={screen.s} mat={mat} setMat={setMat} onMat={k=>setScreen({type:"m",k,back:screen})} isLehrer/></div></div>;
-  if(screen?.type==="m") return <div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}><NavBar title={screen.k.split("::")[1]||"Material"} onBack={()=>setScreen(screen.back||null)}/><div style={{paddingBottom:20}}><MatView ik={screen.k} mat={mat} setMat={setMat} isLehrer={false}/></div></div>;
-  if(screen?.type==="neu") return <div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}><NavBar title="Neuer Schüler" onBack={()=>setScreen(null)}/><NeuerS alsMeine={!!screen.meine} profilId={pid} onSaved={()=>{ladeListe();setScreen(null);}}/></div>;
+  if(screen?.type==="s") return <div style={{fontFamily:F,background:"transparent",minHeight:"100dvh"}}><NavBar title={screen.s.name} onBack={()=>{setScreen(null);ladeListe();}}/><div style={{paddingBottom:20}}><DiagrammView s={screen.s} mat={mat} setMat={setMat} onMat={k=>setScreen({type:"m",k,back:screen})} isLehrer/></div></div>;
+  if(screen?.type==="m") return <div style={{fontFamily:F,background:"transparent",minHeight:"100dvh"}}><NavBar title={screen.k.split("::")[1]||"Material"} onBack={()=>setScreen(screen.back||null)}/><div style={{paddingBottom:20}}><MatView ik={screen.k} mat={mat} setMat={setMat} isLehrer={false}/></div></div>;
+  if(screen?.type==="neu") return <div style={{fontFamily:F,background:"transparent",minHeight:"100dvh"}}><NavBar title="Neuer Schüler" onBack={()=>setScreen(null)}/><NeuerS alsMeine={!!screen.meine} profilId={pid} onSaved={()=>{ladeListe();setScreen(null);}}/></div>;
 
   const tabs={
     home:<LehrerHome liste={liste} aktiv={aktiv} archiv={archiv} meineListe={meineListe} onOpen={openS} onNeu={()=>setScreen({type:"neu",meine:true})} onAlle={f=>{setFilter(f);setTab("schueler");}}/>,
@@ -296,13 +296,13 @@ function LehrerApp({onLogout,profil}) {
     profil:<Profil onLogout={onLogout} isLehrer profil={profil}/>,
   };
 
-  return <div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}><div style={{paddingBottom:83}}>{tabs[tab]}</div><TabBar active={tab} onChange={setTab} isLehrer/></div>;
+  return <div style={{fontFamily:F,background:"transparent",minHeight:"100dvh"}}><div style={{paddingBottom:83}}>{tabs[tab]}</div><TabBar active={tab} onChange={setTab} isLehrer/></div>;
 }
 
 // ── LEHRER HOME ─────────────────────────────────────
 function LehrerHome({liste,aktiv,archiv,meineListe,onOpen,onNeu,onAlle}) {
   return (
-    <div style={{background:"transparent",minHeight:"100vh",padding:"20px 16px 0"}}>
+    <div style={{background:"transparent",minHeight:"100dvh",padding:"20px 16px 0"}}>
       <div style={{marginBottom:24}}>
         <div style={{fontSize:11,color:T.blue,fontWeight:700,letterSpacing:1,marginBottom:2,fontFamily:F}}>FAHRLEHRER SAAD</div>
         <div style={{fontSize:28,fontWeight:600,color:T.label,letterSpacing:-0.56,fontFamily:F}}>Dashboard</div>
@@ -380,7 +380,7 @@ function SListe({aktiv,archiv,meine,onMeine,fehler,filter:filterProp,setFilter,o
 
   const tabs=ohneMeine?[{l:`Aktiv (${aktiv.length})`,v:"aktiv"},{l:`Archiv (${archiv.length})`,v:"archiv"}]:[{l:`Aktiv (${aktiv.length})`,v:"aktiv"},{l:`Meine Schüler (${meineListe.length})`,v:"meine"},{l:`Archiv (${archiv.length})`,v:"archiv"}];
   return (
-    <div style={{background:"transparent",minHeight:"100vh",padding:"20px 16px 0"}}>
+    <div style={{background:"transparent",minHeight:"100dvh",padding:"20px 16px 0"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:16}}>
         <div style={{fontSize:28,fontWeight:600,color:T.label,letterSpacing:-0.56,fontFamily:F}}>Schüler</div>
         <button onClick={onNeu} style={{background:T.blue,color:"#fff",border:"none",borderRadius:999,padding:"8px 16px",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:F}}>+ Neu</button>
@@ -640,7 +640,7 @@ function MatListe({mat,onOpen,themen,nurMitMaterial}) {
   const stufe=LERN.find(x=>x.key===sel)||LERN[0];
   const stufeGruppen=nurMitMaterial?stufe.gruppen.filter(g=>{const m2=mat&&mat[`${stufe.id}::${g.name}`];return m2&&(m2.videoUrl||m2.fotos?.length>0||m2.quiz?.length>0||m2.pdfUrl);}):stufe.gruppen;
   return (
-    <div style={{background:"transparent",minHeight:"100vh",padding:"20px 16px 0"}}>
+    <div style={{background:"transparent",minHeight:"100dvh",padding:"20px 16px 0"}}>
       <div style={{fontSize:28,fontWeight:600,color:T.label,letterSpacing:-0.56,marginBottom:4,fontFamily:F}}>Lernen</div>
       <div style={{fontSize:14,color:T.label2,marginBottom:20,fontFamily:F}}>{nurMitMaterial?"Verfügbares Lernmaterial":"Lernmaterial für alle Bereiche"}</div>
       <div style={{display:"flex",gap:8,marginBottom:14,overflowX:"auto",paddingBottom:4}}>
@@ -922,14 +922,14 @@ function Profil({onLogout,isLehrer,profil,fahrlehrer=[],meineIds=[],standorte=[]
   const [detail,setDetail]=useState(null);
   const abmelden=<button onClick={onLogout} style={{width:"100%",background:T.card,backdropFilter:"blur(20px)",border:`1px solid ${T.sep}`,borderRadius:14,padding:"14px",fontSize:16,fontWeight:500,cursor:"pointer",color:T.red,fontFamily:F,marginBottom:24}}>Abmelden</button>;
   if(isLehrer) return (
-    <div style={{background:"transparent",minHeight:"100vh",padding:"20px 16px 0",fontFamily:F}}>
+    <div style={{background:"transparent",minHeight:"100dvh",padding:"20px 16px 0",fontFamily:F}}>
       <div style={{fontSize:28,fontWeight:600,color:T.label,letterSpacing:-0.56,marginBottom:16}}>Mein Profil</div>
       <ProfilKarte p={profil||DEFAULT_PROFIL}/>
       {abmelden}
     </div>
   );
   if(detail) return (
-    <div style={{fontFamily:F,background:"transparent",minHeight:"100vh",paddingBottom:100}}>
+    <div style={{fontFamily:F,background:"transparent",minHeight:"100dvh",paddingBottom:100}}>
       <NavBar title={detail.typ==="so"?detail.p.name:`Fahrlehrer ${detail.p.name}`} onBack={()=>setDetail(null)}/>
       <div style={{padding:"16px 16px 0"}}>{detail.typ==="so"?<StandortDetail o={detail.p}/>:<ProfilKarte p={detail.p}/>}</div>
     </div>
@@ -944,7 +944,7 @@ function Profil({onLogout,isLehrer,profil,fahrlehrer=[],meineIds=[],standorte=[]
   if(kacheln.length===0) kacheln.push({p:DEFAULT_PROFIL,label:null});
   const lab={fontSize:11,fontWeight:700,color:T.label2,letterSpacing:0.8,textTransform:"uppercase",marginBottom:10,paddingLeft:4};
   return (
-    <div style={{background:"transparent",minHeight:"100vh",padding:"20px 16px 0",fontFamily:F}}>
+    <div style={{background:"transparent",minHeight:"100dvh",padding:"20px 16px 0",fontFamily:F}}>
       <div style={{fontSize:28,fontWeight:600,color:T.label,letterSpacing:-0.56,marginBottom:16}}>Fahrschule</div>
       {standorte.length>0&&<div style={{marginBottom:24}}>
         <div style={lab}>Standorte</div>
@@ -988,7 +988,7 @@ function AdminApp({onLogout}) {
 
   const aktiv=liste.filter(s=>!["archiviert","abgeschlossen"].includes(s.status||"aktiv"));
   const archiv=liste.filter(s=>["archiviert","abgeschlossen"].includes(s.status||"aktiv"));
-  const seite=(titel,onBack,inhalt)=><div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}><NavBar title={titel} onBack={onBack}/>{inhalt}</div>;
+  const seite=(titel,onBack,inhalt)=><div style={{fontFamily:F,background:"transparent",minHeight:"100dvh"}}><NavBar title={titel} onBack={onBack}/>{inhalt}</div>;
 
   if(screen?.type==="s") return seite(screen.s.name,()=>{setScreen(null);ladeListe();},<div style={{paddingBottom:20}}><DiagrammView s={screen.s} mat={mat} setMat={setMat} onMat={k=>setScreen({type:"m",k,back:screen})} isLehrer adminEdit/></div>);
   if(screen?.type==="m") return seite(screen.k.split("::")[1]||"Material",()=>setScreen(screen.back||null),<div style={{paddingBottom:20}}><MatView ik={screen.k} mat={mat} setMat={setMat} isLehrer/></div>);
@@ -1000,7 +1000,7 @@ function AdminApp({onLogout}) {
     lernen:<MatListe mat={mat} onOpen={k=>setScreen({type:"m",k,back:null})}/>,
     fahrschule:<AdminFahrschule onLogout={onLogout}/>,
   };
-  return <div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}><div style={{paddingBottom:83}}>{inhalt[tab]}</div><TabBar active={tab} onChange={setTab} tabsOverride={ADMIN_TABS}/></div>;
+  return <div style={{fontFamily:F,background:"transparent",minHeight:"100dvh"}}><div style={{paddingBottom:83}}>{inhalt[tab]}</div><TabBar active={tab} onChange={setTab} tabsOverride={ADMIN_TABS}/></div>;
 }
 
 function AdminDashboard() {
@@ -1031,7 +1031,7 @@ function AdminDashboard() {
     if(error)setFehler("Fehler: "+error.message);else laden();
   };
   return (
-    <div style={{background:"transparent",minHeight:"100vh",padding:"20px 16px 0",fontFamily:F}}>
+    <div style={{background:"transparent",minHeight:"100dvh",padding:"20px 16px 0",fontFamily:F}}>
       <div style={{marginBottom:24}}>
         <div style={{fontSize:11,color:T.blue,fontWeight:700,letterSpacing:1,marginBottom:2}}>ADMIN</div>
         <div style={{fontSize:28,fontWeight:600,color:T.label,letterSpacing:-0.56}}>Dashboard</div>
@@ -1079,15 +1079,15 @@ function AdminFahrschule({onLogout}) {
   },[]);
   useEffect(()=>{laden();},[laden]);
 
-  if(screen?.kind==="fl") return <div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}><NavBar title={screen.p?`Fahrlehrer ${screen.p.name}`:"Neuer Fahrlehrer"} onBack={()=>setScreen(null)}/><FahrlehrerForm p={screen.p} onDone={()=>{laden();setScreen(null);}}/></div>;
-  if(screen?.kind==="so") return <div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}><NavBar title={screen.p?screen.p.name:"Neuer Standort"} onBack={()=>setScreen(null)}/><StandortForm p={screen.p} onDone={()=>{laden();setScreen(null);}}/></div>;
+  if(screen?.kind==="fl") return <div style={{fontFamily:F,background:"transparent",minHeight:"100dvh"}}><NavBar title={screen.p?`Fahrlehrer ${screen.p.name}`:"Neuer Fahrlehrer"} onBack={()=>setScreen(null)}/><FahrlehrerForm p={screen.p} onDone={()=>{laden();setScreen(null);}}/></div>;
+  if(screen?.kind==="so") return <div style={{fontFamily:F,background:"transparent",minHeight:"100dvh"}}><NavBar title={screen.p?screen.p.name:"Neuer Standort"} onBack={()=>setScreen(null)}/><StandortForm p={screen.p} onDone={()=>{laden();setScreen(null);}}/></div>;
 
   const kopf=(titel,onNeu)=><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
     <div style={{fontSize:11,color:T.label2,fontWeight:700,letterSpacing:0.8,textTransform:"uppercase"}}>{titel}</div>
     <button onClick={onNeu} style={{background:T.blue,color:"#fff",border:"none",borderRadius:999,padding:"7px 16px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:F}}>+ Neu</button>
   </div>;
   return (
-    <div style={{fontFamily:F,background:"transparent",minHeight:"100vh",padding:"20px 16px 0"}}>
+    <div style={{fontFamily:F,background:"transparent",minHeight:"100dvh",padding:"20px 16px 0"}}>
       <div style={{marginBottom:24}}>
         <div style={{fontSize:11,color:T.blue,fontWeight:700,letterSpacing:1,marginBottom:2}}>ADMIN</div>
         <div style={{fontSize:28,fontWeight:600,color:T.label,letterSpacing:-0.56}}>Fahrschule</div>
@@ -1269,13 +1269,13 @@ function SchuelerApp({schueler,onLogout}) {
 
   const pct=Math.round((Object.values(themen).filter(v=>v===2).length/ALL.length)*100);
 
-  if(screen?.type==="mat") return <div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}><NavBar title={screen.k.split("::")[1]||"Material"} onBack={()=>setScreen(null)}/><div style={{paddingBottom:20}}><MatView ik={screen.k} mat={mat} setMat={setMat} isLehrer={false}/></div></div>;
+  if(screen?.type==="mat") return <div style={{fontFamily:F,background:"transparent",minHeight:"100dvh"}}><NavBar title={screen.k.split("::")[1]||"Material"} onBack={()=>setScreen(null)}/><div style={{paddingBottom:20}}><MatView ik={screen.k} mat={mat} setMat={setMat} isLehrer={false}/></div></div>;
 
   const renderTab=()=>{
     if(load) return <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:100}}><span style={{fontSize:40}}>⏳</span></div>;
 
     if(tab==="home") return (
-      <div style={{background:"transparent",minHeight:"100vh",padding:"20px 16px 0",fontFamily:F}}>
+      <div style={{background:"transparent",minHeight:"100dvh",padding:"20px 16px 0",fontFamily:F}}>
         <div style={{marginBottom:20}}>
           <div style={{fontSize:11,color:T.blue,fontWeight:700,letterSpacing:1}}>FAHRLEHRER SAAD</div>
           <div style={{fontSize:28,fontWeight:600,color:T.label,letterSpacing:-0.56,fontFamily:F}}>Hallo, {schueler.name.split(" ")[0]}! 👋</div>
@@ -1312,7 +1312,7 @@ function SchuelerApp({schueler,onLogout}) {
     );
 
     if(tab==="diagramm") return (
-      <div style={{background:"transparent",minHeight:"100vh",padding:"20px 0 0",fontFamily:F}}>
+      <div style={{background:"transparent",minHeight:"100dvh",padding:"20px 0 0",fontFamily:F}}>
         <div style={{fontSize:28,fontWeight:600,color:T.label,letterSpacing:-0.56,marginBottom:16,padding:"0 16px"}}>Diagramm</div>
         <DiagrammView s={schueler} mat={mat} setMat={setMat} onMat={k=>setScreen({type:"mat",k})} isLehrer={false} startStufe={selStufe}/>
       </div>
@@ -1325,7 +1325,7 @@ function SchuelerApp({schueler,onLogout}) {
   };
 
   return (
-    <div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}>
+    <div style={{fontFamily:F,background:"transparent",minHeight:"100dvh"}}>
       {screen?renderTab():<><div style={{paddingBottom:83}}>{renderTab()}</div><TabBar active={tab} onChange={setTab} isLehrer={false}/></>}
     </div>
   );
