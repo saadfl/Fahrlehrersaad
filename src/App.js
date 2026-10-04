@@ -252,44 +252,11 @@ export default function App() {
     return ()=>{weg=true;sub.subscription.unsubscribe();};
   },[]);
   const abmelden=async()=>{await supabase.auth.signOut();setUser(null);};
-  if(window.location.hash==="#einrichtung") return <Einrichtung/>;
   if(user===undefined) return <div style={{minHeight:"100dvh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:F,color:"#9DB4F0"}}>Lädt…</div>;
   if(!user) return <Login onLogin={setUser}/>;
   if(user.role==="admin") return <AdminApp onLogout={abmelden}/>;
   if(user.role==="lehrer") return <LehrerApp profil={user.profil} onLogout={abmelden}/>;
   return <SchuelerApp schueler={user.schueler} onLogout={abmelden}/>;
-}
-
-// ── EINRICHTUNG (einmalig: bestehende Konten umstellen) ─────
-function Einrichtung() {
-  const [key,setKey]=useState(""); const [load,setLoad]=useState(false); const [err,setErr]=useState(""); const [res,setRes]=useState(null);
-  const go=async()=>{
-    setLoad(true);setErr("");
-    const {data,error}=await kontoFn({aktion:"migrieren",key:key.trim()});
-    setLoad(false);
-    if(error){setErr(error);return;}
-    setRes(data.ergebnis||[]);
-  };
-  const inp={background:"rgba(255,255,255,.08)",border:"1px solid rgba(255,255,255,.15)",borderRadius:14,padding:"15px 16px",color:"#fff",fontSize:16,outline:"none",fontFamily:F,width:"100%",boxSizing:"border-box"};
-  return <div style={{maxWidth:440,margin:"0 auto",padding:"40px 20px",fontFamily:F,color:"#fff"}}>
-    <div style={{fontSize:26,fontWeight:600,marginBottom:8}}>Einrichtung</div>
-    <div style={{fontSize:14,color:"#9DB4F0",marginBottom:20,lineHeight:1.5}}>Legt für alle bestehenden Fahrlehrer und Schüler ein sicheres Konto an. Das Ergebnis wird nur jetzt angezeigt – bitte notieren oder einen Screenshot machen.</div>
-    {!res&&<>
-      <input value={key} onChange={e=>setKey(e.target.value)} placeholder="Einrichtungsschlüssel" style={inp}/>
-      {err&&<div style={{color:"#FFB86B",fontSize:14,marginTop:12}}>{err}</div>}
-      <button onClick={go} disabled={load||!key.trim()} style={{marginTop:16,width:"100%",border:"none",background:"#4C8DFF",color:"#fff",borderRadius:16,padding:16,fontSize:16,fontWeight:600,cursor:"pointer",opacity:load?0.7:1,fontFamily:F}}>{load?"Läuft…":"Konten anlegen"}</button>
-    </>}
-    {res&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
-      {res.length===0&&<div style={{color:"#9DB4F0"}}>Nichts zu tun – alle Konten sind schon umgestellt.</div>}
-      {res.map((r,i)=><div key={i} style={{background:"rgba(255,255,255,.08)",border:"1px solid rgba(255,255,255,.12)",borderRadius:16,padding:"12px 14px",fontSize:14,lineHeight:1.5}}>
-        <div style={{fontWeight:600}}>{r.name} <span style={{color:"#9DB4F0",fontWeight:400}}>({r.typ==="lehrer"?"Fahrlehrer":"Schüler"})</span></div>
-        {r.fehler?<div style={{color:"#FF6B6B"}}>Fehler: {r.fehler}</div>:<>
-          <div>Anmeldename: <b>{r.login_name}</b></div>
-          <div>PIN: <b style={{letterSpacing:2}}>{r.pin}</b> {r.neue_pin&&<span style={{color:"#FFB86B"}}>(neu vergeben)</span>}</div>
-        </>}
-      </div>)}
-    </div>}
-  </div>;
 }
 
 // ── LEHRER APP ──────────────────────────────────────

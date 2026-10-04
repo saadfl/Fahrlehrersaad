@@ -1,5 +1,5 @@
 // Supabase Edge Function: konto-verwalten
-// Legt Konten an, setzt PINs, löscht Konten und migriert die bestehenden Nutzer.
+// Legt Konten an, setzt PINs und löscht Konten.
 // Der geheime Service-Schlüssel bleibt hier auf dem Server und kommt nie in die App.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -123,31 +123,6 @@ Deno.serve(async (req) => {
         if (error) return fehler("Fehler: " + error.message, 500);
         if (z?.auth_id) await admin.auth.admin.deleteUser(z.auth_id);
         return antwort({ ok: true });
-      }
-
-      case "migrieren": {
-        // Einmalig: bestehende Schüler/Lehrer bekommen ein Konto. Geschützt durch den Einrichtungsschlüssel.
-        const { data: k } = await admin.from("einrichtung_schluessel").select("wert").eq("name", "migration").maybeSingle();
-        const key = k?.wert || Deno.env.get("MIGRATION_KEY");
-        if (!key || body.key !== key) return fehler("Einrichtungsschlüssel falsch.", 403);
-        const ergebnis: unknown[] = [];
-        for (const [typ, tabelle] of [["lehrer", "fahrlehrer_profil"], ["schueler", "schueler"]] as const) {
-          const { data: zeilen } = await admin.from(tabelle).select("*").is("auth_id", null);
-          for (const z of zeilen || []) {
-            const alt = String(z.pin || "");
-            const neu = !/^\d{6,8}$/.test(alt);
-            const pin = neu ? zufallsPin() : alt;
-            try {
-              const login = await freierLoginName(tabelle, z.name);
-              const authId = await authAnlegen(typ, login, pin);
-              await admin.from(tabelle).update({ auth_id: authId, login_name: login }).eq("id", z.id);
-              ergebnis.push({ typ, name: z.name, login_name: login, pin, neue_pin: neu });
-            } catch (e) {
-              ergebnis.push({ typ, name: z.name, fehler: String((e as Error).message) });
-            }
-          }
-        }
-        return antwort({ ok: true, ergebnis });
       }
 
       default:
