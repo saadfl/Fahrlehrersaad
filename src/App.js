@@ -1439,7 +1439,7 @@ function SchuelerApp({schueler,onLogout}) {
       </div>
     );
 
-    if(tab==="lernen") return <MatListe mat={mat} themen={themen} nurMitMaterial onOpen={k=>setScreen({type:"mat",k})}/>;
+    if(tab==="lernen") return <MatListe mat={mat} themen={themen} onOpen={k=>setScreen({type:"mat",k})}/>;
 
     if(tab==="profil") return <Profil fahrlehrer={fahrlehrer} meineIds={meineIds} standorte={standorte}/>;
     return null;
