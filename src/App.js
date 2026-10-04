@@ -83,7 +83,7 @@ const LERN = AUSBILDUNG.flatMap(x=>{
 const ALL = AUSBILDUNG.flatMap(s=>s.gruppen.flatMap(g=>g.items.map(i=>`${s.id}::${g.name}::${i}`)));
 const nxt = v => ((v||0)+1)%3;
 const KLASSEN = ["B","B197","BE","B96"];
-const MEINE = "Saad"; // Marker in schueler_info.fahrlehrer für "Meine Schüler"
+const DEFAULT_PROFIL = {name:"Saad",ort:"Münster, NRW",ueber_mich:"Als leidenschaftlicher Fahrlehrer in Münster helfe ich meinen Schülern, sicher und selbstbewusst ans Steuer zu kommen.",tags:["Klasse B","BE","10+ Jahre"],instagram:"@fahrlehrersaad",tiktok:"@fahrlehrersaad",youtube:"Fahrlehrer Saad",whatsapp:"Direkt schreiben"};
 
 // ── UI COMPONENTS ───────────────────────────────────
 const Card = ({children,style={},onClick}) => (
@@ -174,8 +174,14 @@ function Login({onLogin}) {
   const [err,setErr]=useState(""); const [load,setLoad]=useState(false);
   const go=async()=>{
     setErr(""); setLoad(true);
-    if(name.trim().toLowerCase()==="lehrer"&&pin==="9999"){onLogin({role:"lehrer"});return;}
-    const {data,error}=await supabase.from("schueler").select("*").ilike("name",name.trim()).eq("pin",pin).single();
+    const nm=name.trim();
+    const {data:fl}=await supabase.from("fahrlehrer_profil").select("*").ilike("name",nm).eq("pin",pin).limit(1);
+    if(fl&&fl.length>0){onLogin({role:fl[0].rolle==="admin"?"admin":"lehrer",profil:fl[0]});return;}
+    if(nm.toLowerCase()==="lehrer"&&pin==="9999"){
+      const {data:sa}=await supabase.from("fahrlehrer_profil").select("*").eq("rolle","lehrer").ilike("name","Saad").limit(1);
+      onLogin({role:"lehrer",profil:(sa&&sa[0])||null});return;
+    }
+    const {data,error}=await supabase.from("schueler").select("*").ilike("name",nm).eq("pin",pin).single();
     setLoad(false);
     if(error||!data){setErr("Name oder PIN falsch.");return;}
     onLogin({role:"schueler",schueler:data});
@@ -209,12 +215,14 @@ function Login({onLogin}) {
 export default function App() {
   const [user,setUser]=useState(null);
   if(!user) return <Login onLogin={setUser}/>;
-  if(user.role==="lehrer") return <LehrerApp onLogout={()=>setUser(null)}/>;
+  if(user.role==="admin") return <AdminApp onLogout={()=>setUser(null)}/>;
+  if(user.role==="lehrer") return <LehrerApp profil={user.profil} onLogout={()=>setUser(null)}/>;
   return <SchuelerApp schueler={user.schueler} onLogout={()=>setUser(null)}/>;
 }
 
 // ── LEHRER APP ──────────────────────────────────────
-function LehrerApp({onLogout}) {
+function LehrerApp({onLogout,profil}) {
+  const pid=profil?.id;
   const [tab,setTab]=useState("home");
   const [liste,setListe]=useState([]);
   const [mat,setMat]=useState({});
@@ -226,12 +234,12 @@ function LehrerApp({onLogout}) {
   const ladeListe=useCallback(async()=>{
     const[a,b]=await Promise.all([
       supabase.from("schueler").select("*").order("name"),
-      supabase.from("schueler_info").select("schueler_id,fahrlehrer").eq("fahrlehrer",MEINE),
+      pid?supabase.from("meine_schueler").select("schueler_id").eq("fahrlehrer_id",pid):Promise.resolve({data:[],error:null}),
     ]);
     setListe(a.data||[]);
     if(b.error){setMeineFehler("Meine Schüler konnten nicht geladen werden: "+b.error.message);}
-    else{setMeineFehler("");setMeine(new Set((b.data||[]).map(x=>x.schueler_id)));}
-  },[]);
+    else{setMeineFehler("");setMeine(new Set((b.data||[]).map(x=>String(x.schueler_id))));}
+  },[pid]);
   const ladeMat=useCallback(async()=>{
     const[m,q]=await Promise.all([supabase.from("lernmaterial").select("*"),supabase.from("quiz_fragen").select("*")]);
     const map={};
@@ -243,13 +251,13 @@ function LehrerApp({onLogout}) {
   useEffect(()=>{ladeListe();ladeMat();},[ladeListe,ladeMat]);
 
   const setMeineFlag=async(id,on)=>{
-    const wert=on?MEINE:"";
-    const apply=v=>setMeine(p=>{const n=new Set(p);if(v)n.add(id);else n.delete(id);return n;});
+    if(!pid) return "Kein Fahrlehrer-Profil angemeldet (SQL-Skript ausführen).";
+    const sid=String(id);
+    const apply=v=>setMeine(p=>{const n=new Set(p);if(v)n.add(sid);else n.delete(sid);return n;});
     apply(on);
-    let {data,error}=await supabase.from("schueler_info").update({fahrlehrer:wert}).eq("schueler_id",id).select("schueler_id");
-    if(!error&&(!data||data.length===0)){
-      ({error}=await supabase.from("schueler_info").insert({schueler_id:id,klassen:[],sehhilfe:"Keine",theorie:false,fahrlehrer:wert}));
-    }
+    const {error}=on
+      ?await supabase.from("meine_schueler").upsert({fahrlehrer_id:pid,schueler_id:sid},{onConflict:"fahrlehrer_id,schueler_id"})
+      :await supabase.from("meine_schueler").delete().eq("fahrlehrer_id",pid).eq("schueler_id",sid);
     if(error){apply(!on);return error.message;}
     return null;
   };
@@ -258,17 +266,17 @@ function LehrerApp({onLogout}) {
 
   const aktiv=liste.filter(s=>!["archiviert","abgeschlossen"].includes(s.status||"aktiv"));
   const archiv=liste.filter(s=>["archiviert","abgeschlossen"].includes(s.status||"aktiv"));
-  const meineListe=aktiv.filter(s=>meine.has(s.id));
+  const meineListe=aktiv.filter(s=>meine.has(String(s.id)));
 
   if(screen?.type==="s") return <div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}><NavBar title={screen.s.name} onBack={()=>{setScreen(null);ladeListe();}}/><div style={{paddingBottom:20}}><DiagrammView s={screen.s} mat={mat} setMat={setMat} onMat={k=>setScreen({type:"m",k,back:screen})} isLehrer/></div></div>;
   if(screen?.type==="m") return <div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}><NavBar title={screen.k.split("::")[1]||"Material"} onBack={()=>setScreen(screen.back||null)}/><div style={{paddingBottom:20}}><MatView ik={screen.k} mat={mat} setMat={setMat} isLehrer/></div></div>;
-  if(screen?.type==="neu") return <div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}><NavBar title="Neuer Schüler" onBack={()=>setScreen(null)}/><NeuerS alsMeine={!!screen.meine} onSaved={()=>{ladeListe();setScreen(null);}}/></div>;
+  if(screen?.type==="neu") return <div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}><NavBar title="Neuer Schüler" onBack={()=>setScreen(null)}/><NeuerS alsMeine={!!screen.meine} profilId={pid} onSaved={()=>{ladeListe();setScreen(null);}}/></div>;
 
   const tabs={
     home:<LehrerHome liste={liste} aktiv={aktiv} archiv={archiv} meineListe={meineListe} onOpen={openS} onNeu={()=>setScreen({type:"neu",meine:true})} onAlle={f=>{setFilter(f);setTab("schueler");}}/>,
     schueler:<SListe aktiv={aktiv} archiv={archiv} meine={meine} onMeine={setMeineFlag} fehler={meineFehler} filter={filter} setFilter={setFilter} onOpen={openS} onNeu={()=>setScreen({type:"neu"})} onRefresh={ladeListe}/>,
     material:<MatListe mat={mat} onOpen={k=>setScreen({type:"m",k,back:null})}/>,
-    profil:<Profil onLogout={onLogout} isLehrer/>,
+    profil:<Profil onLogout={onLogout} isLehrer profil={profil}/>,
   };
 
   return <div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}><div style={{paddingBottom:83}}>{tabs[tab]}</div><TabBar active={tab} onChange={setTab} isLehrer/></div>;
@@ -339,7 +347,7 @@ function SListe({aktiv,archiv,meine,onMeine,fehler,filter,setFilter,onOpen,onNeu
   const statusAendern=async(id,st)=>{await supabase.from("schueler").update({status:st}).eq("id",id);onRefresh();};
   const loeschen=async(id)=>{await supabase.from("schueler").delete().eq("id",id);onRefresh();};
 
-  const meineListe=aktiv.filter(s=>meine.has(s.id));
+  const meineListe=aktiv.filter(s=>meine.has(String(s.id)));
   const quelle=filter==="archiv"?archiv:filter==="meine"?meineListe:aktiv;
   const z=quelle.filter(s=>s.name.toLowerCase().includes(suche.toLowerCase()));
 
@@ -350,7 +358,7 @@ function SListe({aktiv,archiv,meine,onMeine,fehler,filter,setFilter,onOpen,onNeu
     if(err){zeigeToast({text:`Speichern fehlgeschlagen: ${err}`},15000);return;}
     zeigeToast({text:on?`${s.name} zu „Meine Schüler“ hinzugefügt`:`${s.name} aus „Meine Schüler“ entfernt`,undo:mitUndo?()=>meineSetzen(s,!on,false):null});
   };
-  const meineWechsel=s=>meineSetzen(s,!meine.has(s.id),true);
+  const meineWechsel=s=>meineSetzen(s,!meine.has(String(s.id)),true);
 
   const tabs=[{l:`Aktiv (${aktiv.length})`,v:"aktiv"},{l:`Meine Schüler (${meineListe.length})`,v:"meine"},{l:`Archiv (${archiv.length})`,v:"archiv"}];
   return (
@@ -372,7 +380,7 @@ function SListe({aktiv,archiv,meine,onMeine,fehler,filter,setFilter,onOpen,onNeu
       <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:24}}>
         {z.length===0&&<Card style={{padding:32,textAlign:"center"}}><div style={{color:T.label2,fontFamily:F}}>Keine Schüler</div></Card>}
         {z.map(s=>{
-          const ist=meine.has(s.id); const imArchiv=filter==="archiv";
+          const ist=meine.has(String(s.id)); const imArchiv=filter==="archiv";
           return <SRowFull key={s.id} s={s} istMeine={ist} onClick={()=>onOpen(s)} onSA={statusAendern} onDel={loeschen}
             onSwipeLeft={imArchiv?()=>reaktivieren(s):()=>meineWechsel(s)}
             labelLeft={imArchiv?"Reaktivieren":ist?"Aus Meine Schüler":"Meine Schüler"}
@@ -413,7 +421,7 @@ function SRowFull({s,istMeine,onClick,onSA,onDel,onSwipeLeft,onSwipeRight,labelL
 }
 
 // ── NEUER SCHÜLER ───────────────────────────────────
-function NeuerS({onSaved,alsMeine}) {
+function NeuerS({onSaved,alsMeine,profilId}) {
   const [f,setF]=useState({name:"",pin:""}); const [err,setErr]=useState(""); const [saving,setSaving]=useState(false); const [ok,setOk]=useState(null);
   const go=async()=>{
     if(!f.name.trim()){setErr("Namen eingeben.");return;} if(f.pin.length<4){setErr("PIN mind. 4 Stellen.");return;}
@@ -421,7 +429,8 @@ function NeuerS({onSaved,alsMeine}) {
     const{data,error}=await supabase.from("schueler").insert({name:f.name.trim(),pin:f.pin,status:"aktiv"}).select().single();
     setSaving(false);
     if(error){setErr("Fehler: "+error.message);return;}
-    await supabase.from("schueler_info").insert({schueler_id:data.id,klassen:[],sehhilfe:"Keine",theorie:false,fahrlehrer:alsMeine?MEINE:""});
+    await supabase.from("schueler_info").insert({schueler_id:data.id,klassen:[],sehhilfe:"Keine",theorie:false,fahrlehrer:""});
+    if(alsMeine&&profilId) await supabase.from("meine_schueler").insert({fahrlehrer_id:profilId,schueler_id:String(data.id)});
     setOk({name:f.name.trim(),pin:f.pin}); onSaved();
   };
   if(ok) return <div style={{padding:"48px 20px",textAlign:"center",fontFamily:F}}><div style={{fontSize:64,marginBottom:16}}>🎉</div><div style={{fontSize:24,fontWeight:700,color:T.label,marginBottom:16}}>Schüler angelegt!</div><Card style={{padding:20,textAlign:"left"}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><span style={{color:T.label2}}>Name</span><span style={{fontWeight:600}}>{ok.name}</span></div><div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:T.label2}}>PIN</span><span style={{fontWeight:700,fontSize:22,letterSpacing:4,color:T.blue}}>{ok.pin}</span></div></Card></div>;
@@ -821,35 +830,144 @@ function QuizView({quiz,st,setSt,onBack}) {
 }
 
 // ── PROFIL ──────────────────────────────────────────
-function Profil({onLogout,isLehrer}) {
+const ProfilKarte = ({p,label}) => {
+  const soc=[{icon:"📸",l:"Instagram",h:p.instagram,c:"#E1306C"},{icon:"🎵",l:"TikTok",h:p.tiktok,c:"#000"},{icon:"▶️",l:"YouTube",h:p.youtube,c:"#FF0000"},{icon:"💬",l:"WhatsApp",h:p.whatsapp,c:"#25D366"}].filter(x=>x.h);
+  const lab={fontSize:11,fontWeight:700,color:T.label2,letterSpacing:0.8,textTransform:"uppercase",marginBottom:8,paddingLeft:4};
   return (
-    <div style={{background:"transparent",minHeight:"100vh",padding:"20px 16px 0",fontFamily:F}}>
-      <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,marginBottom:16}}>{isLehrer?"Mein Profil":"Fahrlehrer"}</div>
+    <div style={{marginBottom:28}}>
+      {label&&<div style={{fontSize:14,fontWeight:700,color:T.blue,marginBottom:10,paddingLeft:4}}>{label}</div>}
       <div style={{background:"rgba(76,141,255,0.22)",border:"1px solid rgba(111,160,255,0.4)",borderRadius:20,padding:"22px 20px",display:"flex",alignItems:"center",gap:16,marginBottom:14}}>
         <div style={{width:76,height:76,borderRadius:"50%",background:"rgba(255,255,255,0.18)",backdropFilter:"blur(10px)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:36,flexShrink:0,border:"2px solid rgba(255,255,255,0.3)"}}>👨‍🏫</div>
         <div>
-          <div style={{fontSize:23,fontWeight:700,color:"#fff"}}>Fahrlehrer Saad</div>
-          <div style={{fontSize:13,color:"rgba(255,255,255,0.75)",marginTop:3}}>📍 Münster, NRW</div>
-          <div style={{display:"flex",gap:6,marginTop:10,flexWrap:"wrap"}}>
-            {["Klasse B","BE","10+ Jahre"].map((t,i)=><div key={i} style={{background:"rgba(255,255,255,0.18)",backdropFilter:"blur(8px)",borderRadius:999,padding:"4px 12px",fontSize:12,color:"#fff",fontWeight:500,border:"1px solid rgba(255,255,255,0.3)"}}>{t}</div>)}
-          </div>
+          <div style={{fontSize:23,fontWeight:700,color:"#fff"}}>Fahrlehrer {p.name}</div>
+          {p.ort&&<div style={{fontSize:13,color:"rgba(255,255,255,0.75)",marginTop:3}}>📍 {p.ort}</div>}
+          {(p.tags||[]).length>0&&<div style={{display:"flex",gap:6,marginTop:10,flexWrap:"wrap"}}>
+            {p.tags.map((t,i)=><div key={i} style={{background:"rgba(255,255,255,0.18)",backdropFilter:"blur(8px)",borderRadius:999,padding:"4px 12px",fontSize:12,color:"#fff",fontWeight:500,border:"1px solid rgba(255,255,255,0.3)"}}>{t}</div>)}
+          </div>}
         </div>
       </div>
-      <div style={{fontSize:11,fontWeight:700,color:T.label2,letterSpacing:0.8,textTransform:"uppercase",marginBottom:8,paddingLeft:4}}>Über mich</div>
-      <Card style={{padding:18,marginBottom:14}}>
-        <div style={{fontSize:15,color:T.label,lineHeight:1.65}}>Als leidenschaftlicher Fahrlehrer in Münster helfe ich meinen Schülern, sicher und selbstbewusst ans Steuer zu kommen.</div>
-      </Card>
-      <div style={{fontSize:11,fontWeight:700,color:T.label2,letterSpacing:0.8,textTransform:"uppercase",marginBottom:8,paddingLeft:4}}>Social Media & Kontakt</div>
-      <div style={{background:T.white,borderRadius:16,overflow:"hidden",border:`1px solid ${T.glassBorder}`,boxShadow:T.s1,marginBottom:14}}>
-        {[{icon:"📸",l:"Instagram",h:"@fahrlehrersaad",c:"#E1306C"},{icon:"🎵",l:"TikTok",h:"@fahrlehrersaad",c:"#000"},{icon:"▶️",l:"YouTube",h:"Fahrlehrer Saad",c:"#FF0000"},{icon:"💬",l:"WhatsApp",h:"Direkt schreiben",c:"#25D366"}].map((s,i,a)=>(
-          <Row key={i} last={i===a.length-1}>
-            <div style={{width:38,height:38,borderRadius:10,background:s.c,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,marginRight:14}}>{s.icon}</div>
-            <div style={{flex:1}}><div style={{fontSize:15,fontWeight:500,color:T.label}}>{s.l}</div><div style={{fontSize:13,color:T.label2}}>{s.h}</div></div>
-            <span style={{color:T.label3,fontSize:22}}>›</span>
-          </Row>
+      {p.ueber_mich&&<>
+        <div style={lab}>Über mich</div>
+        <Card style={{padding:18,marginBottom:14}}>
+          <div style={{fontSize:15,color:T.label,lineHeight:1.65}}>{p.ueber_mich}</div>
+        </Card>
+      </>}
+      {soc.length>0&&<>
+        <div style={lab}>Social Media & Kontakt</div>
+        <div style={{background:T.white,borderRadius:16,overflow:"hidden",border:`1px solid ${T.glassBorder}`}}>
+          {soc.map((x,i,a)=>(
+            <Row key={i} last={i===a.length-1}>
+              <div style={{width:38,height:38,borderRadius:10,background:x.c,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,marginRight:14}}>{x.icon}</div>
+              <div style={{flex:1}}><div style={{fontSize:15,fontWeight:500,color:T.label}}>{x.l}</div><div style={{fontSize:13,color:T.label2}}>{x.h}</div></div>
+              <span style={{color:T.label3,fontSize:22}}>›</span>
+            </Row>
+          ))}
+        </div>
+      </>}
+    </div>
+  );
+};
+
+function Profil({onLogout,isLehrer,profil,fahrlehrer=[],meineIds=[]}) {
+  let karten=[];
+  if(isLehrer){karten=[{p:profil||DEFAULT_PROFIL}];}
+  else{
+    const byId=new Map(fahrlehrer.map(f=>[f.id,f]));
+    const eigene=meineIds.map(id=>byId.get(id)).filter(Boolean);
+    const rest=fahrlehrer.filter(f=>!meineIds.includes(f.id));
+    karten=[
+      ...eigene.map((p,i)=>({p,label:i===0?"Dein Fahrlehrer":i===1?"Dein zweiter Fahrlehrer":"Dein weiterer Fahrlehrer"})),
+      ...rest.map((p,i)=>({p,label:i===0&&eigene.length>0?"Weitere Fahrlehrer":null})),
+    ];
+    if(karten.length===0) karten=[{p:DEFAULT_PROFIL}];
+  }
+  return (
+    <div style={{background:"transparent",minHeight:"100vh",padding:"20px 16px 0",fontFamily:F}}>
+      <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,marginBottom:16}}>{isLehrer?"Mein Profil":"Fahrlehrer"}</div>
+      {karten.map((k,i)=><ProfilKarte key={k.p.id||i} p={k.p} label={k.label}/>)}
+      <button onClick={onLogout} style={{width:"100%",background:T.card,backdropFilter:"blur(20px)",border:`1px solid ${T.sep}`,borderRadius:14,padding:"14px",fontSize:16,fontWeight:500,cursor:"pointer",color:T.red,fontFamily:F,marginBottom:24}}>Abmelden</button>
+    </div>
+  );
+}
+
+// ── ADMIN ───────────────────────────────────────────
+function AdminApp({onLogout}) {
+  const [liste,setListe]=useState([]); const [screen,setScreen]=useState(null); const [fehler,setFehler]=useState("");
+  const laden=useCallback(async()=>{
+    const {data,error}=await supabase.from("fahrlehrer_profil").select("*").eq("rolle","lehrer").order("erstellt_am");
+    if(error){setFehler("Fahrlehrer konnten nicht geladen werden: "+error.message);}
+    else{setFehler("");setListe(data||[]);}
+  },[]);
+  useEffect(()=>{laden();},[laden]);
+
+  if(screen) return <div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}><NavBar title={screen.p?`Fahrlehrer ${screen.p.name}`:"Neuer Fahrlehrer"} onBack={()=>setScreen(null)}/><FahrlehrerForm p={screen.p} onDone={()=>{laden();setScreen(null);}}/></div>;
+
+  return (
+    <div style={{fontFamily:F,background:"transparent",minHeight:"100vh",padding:"20px 16px 0"}}>
+      <div style={{marginBottom:24}}>
+        <div style={{fontSize:11,color:T.blue,fontWeight:700,letterSpacing:1,marginBottom:2}}>ADMIN</div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
+          <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5}}>Fahrlehrer</div>
+          <button onClick={()=>setScreen({p:null})} style={{background:T.blue,color:"#fff",border:"none",borderRadius:999,padding:"8px 16px",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:F}}>+ Neu</button>
+        </div>
+      </div>
+      {fehler&&<div style={{background:T.dangerBg,color:T.red,borderRadius:10,padding:"10px 14px",fontSize:13,marginBottom:14,border:`1px solid ${T.red}33`}}>{fehler}</div>}
+      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:24}}>
+        {liste.length===0&&!fehler&&<Card style={{padding:32,textAlign:"center"}}><div style={{color:T.label2}}>Noch keine Fahrlehrer</div></Card>}
+        {liste.map(f=>(
+          <Card key={f.id} onClick={()=>setScreen({p:f})} style={{padding:"14px 16px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:14}}>
+              <div style={{width:44,height:44,borderRadius:"50%",background:"rgba(255,255,255,0.12)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>👨‍🏫</div>
+              <div style={{flex:1}}><div style={{fontSize:16,fontWeight:600,color:T.label}}>{f.name}</div>{f.ort&&<div style={{fontSize:12,color:T.label2,marginTop:2}}>📍 {f.ort}</div>}</div>
+              <span style={{color:T.label3,fontSize:22}}>›</span>
+            </div>
+          </Card>
         ))}
       </div>
-      <button onClick={onLogout} style={{width:"100%",background:T.card,backdropFilter:"blur(20px)",border:`1px solid ${T.sep}`,borderRadius:14,padding:"14px",fontSize:16,fontWeight:500,cursor:"pointer",color:T.red,fontFamily:F,marginBottom:24,boxShadow:T.s1}}>Abmelden</button>
+      <button onClick={onLogout} style={{width:"100%",background:T.card,backdropFilter:"blur(20px)",border:`1px solid ${T.sep}`,borderRadius:14,padding:"14px",fontSize:16,fontWeight:500,cursor:"pointer",color:T.red,fontFamily:F,marginBottom:24}}>Abmelden</button>
+    </div>
+  );
+}
+
+function FahrlehrerForm({p,onDone}) {
+  const [f,setF]=useState({name:p?.name||"",pin:p?.pin||"",ort:p?.ort||"",ueber_mich:p?.ueber_mich||"",tags:(p?.tags||[]).join(", "),instagram:p?.instagram||"",tiktok:p?.tiktok||"",youtube:p?.youtube||"",whatsapp:p?.whatsapp||""});
+  const [err,setErr]=useState(""); const [saving,setSaving]=useState(false); const [del,setDel]=useState(false);
+  const inp={width:"100%",boxSizing:"border-box",background:T.inset,border:`1px solid ${T.sep}`,borderRadius:12,padding:"12px 16px",fontSize:15,color:T.label,outline:"none",fontFamily:F};
+  const feld=(label,key,extra={})=><div style={{marginBottom:14}}><div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:7}}>{label}</div><input style={inp} value={f[key]} onChange={e=>setF({...f,[key]:extra.digits?e.target.value.replace(/\D/g,""):e.target.value})} placeholder={extra.ph||""} maxLength={extra.max}/></div>;
+  const save=async()=>{
+    if(!f.name.trim()){setErr("Namen eingeben.");return;}
+    if(f.pin.length<4){setErr("PIN mind. 4 Stellen.");return;}
+    setSaving(true);setErr("");
+    const row={rolle:"lehrer",name:f.name.trim(),pin:f.pin,ort:f.ort.trim(),ueber_mich:f.ueber_mich.trim(),tags:f.tags.split(",").map(x=>x.trim()).filter(Boolean),instagram:f.instagram.trim(),tiktok:f.tiktok.trim(),youtube:f.youtube.trim(),whatsapp:f.whatsapp.trim()};
+    const {error}=p?await supabase.from("fahrlehrer_profil").update(row).eq("id",p.id):await supabase.from("fahrlehrer_profil").insert(row);
+    setSaving(false);
+    if(error){setErr("Fehler: "+error.message);return;}
+    onDone();
+  };
+  const loeschen=async()=>{
+    const {error}=await supabase.from("fahrlehrer_profil").delete().eq("id",p.id);
+    if(error){setErr("Fehler: "+error.message);setDel(false);return;}
+    onDone();
+  };
+  return (
+    <div style={{padding:"20px 16px",fontFamily:F}}>
+      <Card style={{padding:24,marginBottom:14}}>
+        <div style={{fontSize:20,fontWeight:700,color:T.label,marginBottom:20}}>{p?"Profil bearbeiten":"Neuer Fahrlehrer"}</div>
+        {feld("Name *","name",{ph:"z.B. Max"})}
+        {feld("PIN (mind. 4 Stellen) *","pin",{digits:true,max:8})}
+        {feld("Ort","ort",{ph:"z.B. Münster, NRW"})}
+        <div style={{marginBottom:14}}><div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:7}}>Über mich</div><textarea style={{...inp,minHeight:100,resize:"vertical"}} value={f.ueber_mich} onChange={e=>setF({...f,ueber_mich:e.target.value})}/></div>
+        {feld("Etiketten (mit Komma trennen)","tags",{ph:"Klasse B, BE, 10+ Jahre"})}
+        {feld("Instagram","instagram",{ph:"@name"})}
+        {feld("TikTok","tiktok",{ph:"@name"})}
+        {feld("YouTube","youtube")}
+        {feld("WhatsApp","whatsapp")}
+        {err&&<div style={{background:T.dangerBg,color:T.red,borderRadius:10,padding:"10px 14px",fontSize:13,marginBottom:14}}>{err}</div>}
+        <button onClick={save} disabled={saving} style={{width:"100%",background:T.blue,color:"#fff",border:"none",borderRadius:14,padding:14,fontSize:16,fontWeight:600,cursor:"pointer",opacity:saving?0.7:1,fontFamily:F}}>{saving?"Speichern...":"✓ Speichern"}</button>
+      </Card>
+      {p&&(del
+        ?<Card style={{padding:20}}><div style={{textAlign:"center",marginBottom:14,fontSize:16,fontWeight:600,color:T.label}}>{p.name} löschen?</div><div style={{display:"flex",gap:10}}><button onClick={loeschen} style={{flex:1,background:T.dangerBg,color:T.red,border:`1px solid ${T.red}66`,borderRadius:12,padding:"12px",fontWeight:600,cursor:"pointer",fontFamily:F}}>Löschen</button><button onClick={()=>setDel(false)} style={{flex:1,background:T.inset,border:`1px solid ${T.sep}`,borderRadius:12,padding:"12px",cursor:"pointer",fontFamily:F,color:T.label}}>Abbrechen</button></div></Card>
+        :<button onClick={()=>setDel(true)} style={{width:"100%",background:T.dangerBg,color:T.red,border:`1px solid ${T.red}66`,borderRadius:14,padding:"14px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:F}}>🗑 Fahrlehrer löschen</button>)}
     </div>
   );
 }
@@ -861,17 +979,21 @@ function SchuelerApp({schueler,onLogout}) {
   const [notizen,setNotizen]=useState([]); const [info,setInfo]=useState(null);
   const [mat,setMat]=useState({}); const [screen,setScreen]=useState(null);
   const [selStufe,setSelStufe]=useState(null); const [load,setLoad]=useState(true);
+  const [fahrlehrer,setFahrlehrer]=useState([]); const [meineIds,setMeineIds]=useState([]);
 
   useEffect(()=>{
     const l=async()=>{
       setLoad(true);
-      const[t,n,i,m,q]=await Promise.all([
+      const[t,n,i,m,q,f,ms]=await Promise.all([
         supabase.from("ausbildungsstand").select("*").eq("schueler_id",schueler.id),
         supabase.from("notizen").select("*").eq("schueler_id",schueler.id).order("erstellt_am",{ascending:false}),
         supabase.from("schueler_info").select("*").eq("schueler_id",schueler.id).single(),
         supabase.from("lernmaterial").select("*"),
         supabase.from("quiz_fragen").select("*"),
+        supabase.from("fahrlehrer_profil").select("id,name,ort,ueber_mich,tags,instagram,tiktok,youtube,whatsapp,erstellt_am").eq("rolle","lehrer").order("erstellt_am"),
+        supabase.from("meine_schueler").select("fahrlehrer_id,erstellt_am").eq("schueler_id",String(schueler.id)).order("erstellt_am"),
       ]);
+      setFahrlehrer(f.data||[]);setMeineIds((ms.data||[]).map(x=>x.fahrlehrer_id));
       const tm={},nm={};
       (t.data||[]).forEach(x=>{tm[x.item_key]=Number(x.wert);if(x.naechstes)nm[x.item_key]=true;});
       setThemen(tm);setNaechstes(nm);setNotizen(n.data||[]);setInfo(i.data);
@@ -925,7 +1047,7 @@ function SchuelerApp({schueler,onLogout}) {
 
     if(tab==="lernen") return <MatListe mat={mat} themen={themen} nurMitMaterial onOpen={k=>setScreen({type:"mat",k})}/>;
 
-    if(tab==="profil") return <Profil onLogout={onLogout} isLehrer={false}/>;
+    if(tab==="profil") return <Profil onLogout={onLogout} isLehrer={false} fahrlehrer={fahrlehrer} meineIds={meineIds}/>;
     return null;
   };
 
