@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "./supabase";
 
 // ── DESIGN TOKENS ──────────────────────────────────
@@ -74,6 +74,7 @@ const AUSBILDUNG = [
 const ALL = AUSBILDUNG.flatMap(s=>s.gruppen.flatMap(g=>g.items.map(i=>`${s.id}::${g.name}::${i}`)));
 const nxt = v => ((v||0)+1)%3;
 const KLASSEN = ["B","B197","BE","B96"];
+const MEINE = "Saad"; // Marker in schueler_info.fahrlehrer für "Meine Schüler"
 
 // ── UI COMPONENTS ───────────────────────────────────
 const Card = ({children,style={},onClick}) => (
@@ -103,7 +104,7 @@ const Ring = ({pct,size=72,stroke=6}) => {
 
 const TabBar = ({active,onChange,isLehrer}) => {
   const tabs = isLehrer
-    ? [{id:"home",e:"🏠",l:"Home"},{id:"schueler",e:"👥",l:"Schüler"},{id:"material",e:"📚",l:"Material"},{id:"profil",e:"👨‍🏫",l:"Profil"}]
+    ? [{id:"home",e:"🏠",l:"Home"},{id:"schueler",e:"👥",l:"Schüler"},{id:"material",e:"📚",l:"Lernen"},{id:"profil",e:"👨‍🏫",l:"Profil"}]
     : [{id:"home",e:"🏠",l:"Home"},{id:"diagramm",e:"📊",l:"Diagramm"},{id:"lernen",e:"📚",l:"Lernen"},{id:"profil",e:"👨‍🏫",l:"Fahrlehrer"}];
   return (
     <div style={{position:"fixed",bottom:0,left:0,right:0,height:83,background:T.tabBg,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",borderTop:`1px solid ${T.tabBorder}`,display:"flex",alignItems:"flex-start",justifyContent:"space-around",padding:"10px 0 0",zIndex:999,fontFamily:F}}>
@@ -124,6 +125,39 @@ const NavBar = ({title,onBack}) => (
     <div style={{minWidth:70}}/>
   </div>
 );
+
+// ── WISCH-ZEILE ─────────────────────────────────────
+const SwipeRow = ({children,onSwipeLeft,onSwipeRight,labelLeft,labelRight,colorLeft=T.blue,colorRight=T.gray}) => {
+  const [dx,setDx]=useState(0); const [drag,setDrag]=useState(false);
+  const st=useRef({id:null,x:0,y:0,dir:null,moved:false});
+  const down=e=>{if(e.pointerType==="mouse"&&e.button!==0)return;st.current={id:e.pointerId,x:e.clientX,y:e.clientY,dir:null,moved:false};};
+  const move=e=>{
+    const m=st.current;if(m.id!==e.pointerId)return;
+    const mx=e.clientX-m.x,my=e.clientY-m.y;
+    if(m.dir===null&&(Math.abs(mx)>8||Math.abs(my)>8)){
+      m.dir=Math.abs(mx)>Math.abs(my)?"h":"v";
+      if(m.dir==="h"){setDrag(true);try{e.currentTarget.setPointerCapture(e.pointerId);}catch(_){}}
+    }
+    if(m.dir==="h"){
+      m.moved=true;let v=mx;
+      if(v<0&&!onSwipeLeft)v=0; if(v>0&&!onSwipeRight)v=0;
+      setDx(Math.max(-140,Math.min(140,v)));
+    }
+  };
+  const end=e=>{
+    const m=st.current;if(m.id!==e.pointerId)return;
+    m.id=null;setDrag(false);const v=dx;setDx(0);
+    if(m.dir==="h"){if(v<=-80&&onSwipeLeft)onSwipeLeft();else if(v>=80&&onSwipeRight)onSwipeRight();}
+  };
+  const clickCap=e=>{if(st.current.moved){e.stopPropagation();e.preventDefault();st.current.moved=false;}};
+  return (
+    <div onPointerDown={down} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onClickCapture={clickCap}
+      style={{position:"relative",borderRadius:20,overflow:"hidden",touchAction:"pan-y",userSelect:drag?"none":"auto"}}>
+      {dx!==0&&<div style={{position:"absolute",inset:0,background:`${dx<0?colorLeft:colorRight}33`,display:"flex",alignItems:"center",justifyContent:dx<0?"flex-end":"flex-start",padding:"0 20px",color:dx<0?colorLeft:colorRight,fontSize:14,fontWeight:600,fontFamily:F}}>{dx<0?labelLeft:labelRight}</div>}
+      <div style={{transform:`translateX(${dx}px)`,transition:drag?"none":"transform .2s"}}>{children}</div>
+    </div>
+  );
+};
 
 // ── LOGIN ───────────────────────────────────────────
 function Login({onLogin}) {
@@ -176,9 +210,17 @@ function LehrerApp({onLogout}) {
   const [liste,setListe]=useState([]);
   const [mat,setMat]=useState({});
   const [screen,setScreen]=useState(null);
-  const [zuletzt,setZuletzt]=useState([]);
+  const [meine,setMeine]=useState(()=>new Set());
+  const [filter,setFilter]=useState("aktiv");
 
-  const ladeListe=useCallback(async()=>{const{data}=await supabase.from("schueler").select("*").order("name");setListe(data||[]);},[]);
+  const ladeListe=useCallback(async()=>{
+    const[a,b]=await Promise.all([
+      supabase.from("schueler").select("*").order("name"),
+      supabase.from("schueler_info").select("schueler_id,fahrlehrer").eq("fahrlehrer",MEINE),
+    ]);
+    setListe(a.data||[]);
+    setMeine(new Set((b.data||[]).map(x=>x.schueler_id)));
+  },[]);
   const ladeMat=useCallback(async()=>{
     const[m,q]=await Promise.all([supabase.from("lernmaterial").select("*"),supabase.from("quiz_fragen").select("*")]);
     const map={};
@@ -189,18 +231,24 @@ function LehrerApp({onLogout}) {
 
   useEffect(()=>{ladeListe();ladeMat();},[ladeListe,ladeMat]);
 
-  const openS=s=>{setZuletzt(p=>[s,...p.filter(x=>x.id!==s.id)].slice(0,5));setScreen({type:"s",s});};
+  const setMeineFlag=async(id,on)=>{
+    setMeine(p=>{const n=new Set(p);if(on)n.add(id);else n.delete(id);return n;});
+    await supabase.from("schueler_info").upsert({schueler_id:id,fahrlehrer:on?MEINE:""},{onConflict:"schueler_id"});
+  };
+
+  const openS=s=>setScreen({type:"s",s});
 
   const aktiv=liste.filter(s=>!["archiviert","abgeschlossen"].includes(s.status||"aktiv"));
   const archiv=liste.filter(s=>["archiviert","abgeschlossen"].includes(s.status||"aktiv"));
+  const meineListe=aktiv.filter(s=>meine.has(s.id));
 
   if(screen?.type==="s") return <div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}><NavBar title={screen.s.name} onBack={()=>{setScreen(null);ladeListe();}}/><div style={{paddingBottom:20}}><DiagrammView s={screen.s} mat={mat} setMat={setMat} onMat={k=>setScreen({type:"m",k,back:screen})} isLehrer/></div></div>;
   if(screen?.type==="m") return <div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}><NavBar title={screen.k.split("::")[1]||"Material"} onBack={()=>setScreen(screen.back||null)}/><div style={{paddingBottom:20}}><MatView ik={screen.k} mat={mat} setMat={setMat} isLehrer/></div></div>;
   if(screen?.type==="neu") return <div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}><NavBar title="Neuer Schüler" onBack={()=>setScreen(null)}/><NeuerS onSaved={()=>{ladeListe();setScreen(null);}}/></div>;
 
   const tabs={
-    home:<LehrerHome liste={liste} zuletzt={zuletzt} aktiv={aktiv} archiv={archiv} onOpen={openS} onNeu={()=>setScreen({type:"neu"})} onAlle={()=>setTab("schueler")}/>,
-    schueler:<SListe liste={liste} aktiv={aktiv} archiv={archiv} onOpen={openS} onNeu={()=>setScreen({type:"neu"})} onRefresh={ladeListe}/>,
+    home:<LehrerHome liste={liste} aktiv={aktiv} archiv={archiv} meineListe={meineListe} onOpen={openS} onNeu={()=>setScreen({type:"neu"})} onAlle={f=>{setFilter(f);setTab("schueler");}}/>,
+    schueler:<SListe aktiv={aktiv} archiv={archiv} meine={meine} onMeine={setMeineFlag} filter={filter} setFilter={setFilter} onOpen={openS} onNeu={()=>setScreen({type:"neu"})} onRefresh={ladeListe}/>,
     material:<MatListe mat={mat} onOpen={k=>setScreen({type:"m",k,back:null})}/>,
     profil:<Profil onLogout={onLogout} isLehrer/>,
   };
@@ -209,7 +257,7 @@ function LehrerApp({onLogout}) {
 }
 
 // ── LEHRER HOME ─────────────────────────────────────
-function LehrerHome({liste,zuletzt,aktiv,archiv,onOpen,onNeu,onAlle}) {
+function LehrerHome({liste,aktiv,archiv,meineListe,onOpen,onNeu,onAlle}) {
   return (
     <div style={{background:"transparent",minHeight:"100vh",padding:"20px 16px 0"}}>
       <div style={{marginBottom:24}}>
@@ -217,39 +265,29 @@ function LehrerHome({liste,zuletzt,aktiv,archiv,onOpen,onNeu,onAlle}) {
         <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,fontFamily:F}}>Dashboard</div>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:24}}>
-        {[{v:liste.length,l:"Gesamt",c:T.blue,e:"👥"},{v:aktiv.length,l:"Aktiv",c:T.green,e:"🎯"},{v:archiv.length,l:"Archiv",c:T.gray,e:"📦"}].map((s,i)=>(
-          <Card key={i} onClick={onAlle} style={{padding:"14px 10px",textAlign:"center"}}>
-            <div style={{fontSize:22,marginBottom:4}}>{s.e}</div>
-            <div style={{fontSize:26,fontWeight:700,color:s.c,fontFamily:F}}>{s.v}</div>
-            <div style={{fontSize:11,color:T.label2,marginTop:2,fontFamily:F}}>{s.l}</div>
+        {[{v:aktiv.length,l:"Aktiv",c:T.green,e:"🎯",f:"aktiv"},{v:meineListe.length,l:"Meine Schüler",c:T.blue,e:"👥",f:"meine"},{v:archiv.length,l:"Archiv",c:T.gray,e:"📦",f:"archiv"}].map((x,i)=>(
+          <Card key={i} onClick={()=>onAlle(x.f)} style={{padding:"14px 10px",textAlign:"center"}}>
+            <div style={{fontSize:22,marginBottom:4}}>{x.e}</div>
+            <div style={{fontSize:26,fontWeight:700,color:x.c,fontFamily:F}}>{x.v}</div>
+            <div style={{fontSize:11,color:T.label2,marginTop:2,fontFamily:F}}>{x.l}</div>
           </Card>
         ))}
       </div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-        <div style={{fontSize:11,color:T.label2,fontWeight:700,letterSpacing:0.8,textTransform:"uppercase",fontFamily:F}}>Zuletzt geöffnet</div>
+        <div style={{fontSize:11,color:T.label2,fontWeight:700,letterSpacing:0.8,textTransform:"uppercase",fontFamily:F}}>Meine Schüler</div>
         <button onClick={onNeu} style={{background:T.blue,color:"#fff",border:"none",borderRadius:999,padding:"7px 16px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:F}}>+ Neu</button>
       </div>
-      {zuletzt.length===0
+      {meineListe.length===0
         ?<Card style={{padding:32,textAlign:"center",marginBottom:24}}>
             <div style={{fontSize:40,marginBottom:12}}>👥</div>
-            <div style={{fontSize:15,color:T.label2,marginBottom:16,fontFamily:F}}>Noch kein Schüler geöffnet</div>
-            <button onClick={onNeu} style={{background:T.blue,color:"#fff",border:"none",borderRadius:999,padding:"10px 20px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:F}}>Ersten Schüler anlegen</button>
+            <div style={{fontSize:15,color:T.label2,marginBottom:liste.length===0?16:0,fontFamily:F}}>Noch keine Schüler bei „Meine Schüler“</div>
+            {liste.length===0&&<button onClick={onNeu} style={{background:T.blue,color:"#fff",border:"none",borderRadius:999,padding:"10px 20px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:F}}>Ersten Schüler anlegen</button>}
           </Card>
         :<div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:24}}>
-            {zuletzt.filter(s=>liste.find(x=>x.id===s.id)).map(s=>{const a=liste.find(x=>x.id===s.id)||s;return <SRow key={s.id} s={a} onClick={()=>onOpen(a)}/>;} )}
-            <button onClick={onAlle} style={{background:"none",border:`1px solid ${T.sep}`,borderRadius:14,padding:"12px",fontSize:14,color:T.blue,cursor:"pointer",fontFamily:F,textAlign:"center"}}>Alle Schüler ({liste.length}) →</button>
+            {meineListe.map(s=><SRow key={s.id} s={s} onClick={()=>onOpen(s)}/>)}
+            <button onClick={()=>onAlle("aktiv")} style={{background:"none",border:`1px solid ${T.sep}`,borderRadius:14,padding:"12px",fontSize:14,color:T.blue,cursor:"pointer",fontFamily:F,textAlign:"center"}}>Alle Schüler ({aktiv.length}) →</button>
           </div>
       }
-      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:24}}>
-        {[{e:"🏆",t:"Prüfungsreife",d:"Bald verfügbar"},{e:"📖",t:"Theorie",d:"14 Lektionen"}].map((x,i)=>(
-          <Card key={i} style={{padding:14,opacity:0.55}}>
-            <div style={{display:"flex",alignItems:"center",gap:12,justifyContent:"space-between"}}>
-              <div style={{display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:26}}>{x.e}</span><div><div style={{fontSize:15,fontWeight:600,color:T.label,fontFamily:F}}>{x.t}</div><div style={{fontSize:12,color:T.label2,fontFamily:F}}>{x.d}</div></div></div>
-              <div style={{background:`${T.purple}18`,color:T.purple,borderRadius:999,padding:"3px 10px",fontSize:11,fontWeight:700,fontFamily:F}}>Bald</div>
-            </div>
-          </Card>
-        ))}
-      </div>
     </div>
   );
 }
@@ -275,11 +313,23 @@ function SRow({s,onClick}) {
 }
 
 // ── SCHÜLER LISTE ───────────────────────────────────
-function SListe({liste,aktiv,archiv,onOpen,onNeu,onRefresh}) {
-  const [suche,setSuche]=useState(""); const [arc,setArc]=useState(false);
+function SListe({aktiv,archiv,meine,onMeine,filter,setFilter,onOpen,onNeu,onRefresh}) {
+  const [suche,setSuche]=useState(""); const [toast,setToast]=useState(null);
+  const timer=useRef(null);
+  const zeigeToast=t=>{setToast(t);clearTimeout(timer.current);timer.current=setTimeout(()=>setToast(null),5000);};
+  useEffect(()=>()=>clearTimeout(timer.current),[]);
   const statusAendern=async(id,st)=>{await supabase.from("schueler").update({status:st}).eq("id",id);onRefresh();};
   const loeschen=async(id)=>{await supabase.from("schueler").delete().eq("id",id);onRefresh();};
-  const z=(arc?archiv:aktiv).filter(s=>s.name.toLowerCase().includes(suche.toLowerCase()));
+
+  const meineListe=aktiv.filter(s=>meine.has(s.id));
+  const quelle=filter==="archiv"?archiv:filter==="meine"?meineListe:aktiv;
+  const z=quelle.filter(s=>s.name.toLowerCase().includes(suche.toLowerCase()));
+
+  const archivieren=s=>{const alt=s.status||"aktiv";statusAendern(s.id,"archiviert");zeigeToast({text:`${s.name} archiviert`,undo:()=>statusAendern(s.id,alt)});};
+  const reaktivieren=s=>{const alt=s.status||"archiviert";statusAendern(s.id,"aktiv");zeigeToast({text:`${s.name} reaktiviert`,undo:()=>statusAendern(s.id,alt)});};
+  const meineWechsel=s=>{const ist=meine.has(s.id);onMeine(s.id,!ist);zeigeToast({text:ist?`${s.name} aus „Meine Schüler“ entfernt`:`${s.name} zu „Meine Schüler“ hinzugefügt`,undo:()=>onMeine(s.id,ist)});};
+
+  const tabs=[{l:`Aktiv (${aktiv.length})`,v:"aktiv"},{l:`Meine Schüler (${meineListe.length})`,v:"meine"},{l:`Archiv (${archiv.length})`,v:"archiv"}];
   return (
     <div style={{background:"transparent",minHeight:"100vh",padding:"20px 16px 0"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:16}}>
@@ -290,28 +340,41 @@ function SListe({liste,aktiv,archiv,onOpen,onNeu,onRefresh}) {
         <span style={{color:T.label2}}>🔍</span>
         <input value={suche} onChange={e=>setSuche(e.target.value)} placeholder="Suchen..." style={{background:"none",border:"none",outline:"none",fontSize:15,color:T.label,flex:1,fontFamily:F}}/>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:0,background:T.inset,borderRadius:10,padding:2,marginBottom:16,border:`1px solid ${T.sep}`}}>
-        {[{l:`Aktiv (${aktiv.length})`,v:false},{l:`Archiv (${archiv.length})`,v:true}].map(t=>(
-          <button key={String(t.v)} onClick={()=>setArc(t.v)} style={{background:arc===t.v?T.sel:"transparent",border:"none",borderRadius:8,padding:"8px",fontSize:13,fontWeight:600,cursor:"pointer",color:arc===t.v?T.label:T.label2,fontFamily:F,boxShadow:arc===t.v?T.s1:"none",transition:"all .2s"}}>{t.l}</button>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:0,background:T.inset,borderRadius:10,padding:2,marginBottom:16,border:`1px solid ${T.sep}`}}>
+        {tabs.map(t=>(
+          <button key={t.v} onClick={()=>setFilter(t.v)} style={{background:filter===t.v?T.sel:"transparent",border:"none",borderRadius:8,padding:"8px 4px",fontSize:12,fontWeight:600,cursor:"pointer",color:filter===t.v?T.label:T.label2,fontFamily:F,transition:"all .2s"}}>{t.l}</button>
         ))}
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:24}}>
         {z.length===0&&<Card style={{padding:32,textAlign:"center"}}><div style={{color:T.label2,fontFamily:F}}>Keine Schüler</div></Card>}
-        {z.map(s=><SRowFull key={s.id} s={s} onClick={()=>onOpen(s)} onSA={statusAendern} onDel={loeschen}/>)}
+        {z.map(s=>{
+          const ist=meine.has(s.id); const imArchiv=filter==="archiv";
+          return <SRowFull key={s.id} s={s} istMeine={ist} onClick={()=>onOpen(s)} onSA={statusAendern} onDel={loeschen}
+            onSwipeLeft={imArchiv?()=>reaktivieren(s):()=>meineWechsel(s)}
+            labelLeft={imArchiv?"Reaktivieren":ist?"Aus Meine Schüler":"Meine Schüler"}
+            colorLeft={imArchiv?T.green:T.blue}
+            onSwipeRight={imArchiv?null:()=>archivieren(s)}
+            labelRight="Archivieren"/>;
+        })}
       </div>
+      {toast&&<div style={{position:"fixed",left:16,right:16,bottom:95,zIndex:1000,background:"rgba(4,11,38,0.95)",border:`1px solid ${T.glassBorder}`,borderRadius:16,padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,fontFamily:F}}>
+        <span style={{fontSize:14,color:T.label}}>{toast.text}</span>
+        <button onClick={()=>{toast.undo();setToast(null);}} style={{background:"none",border:"none",color:T.blue,fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:F,flexShrink:0}}>Rückgängig</button>
+      </div>}
     </div>
   );
 }
 
-function SRowFull({s,onClick,onSA,onDel}) {
+function SRowFull({s,istMeine,onClick,onSA,onDel,onSwipeLeft,onSwipeRight,labelLeft,labelRight,colorLeft}) {
   const [pct,setPct]=useState(0); const [show,setShow]=useState(false); const [del,setDel]=useState(false);
   useEffect(()=>{supabase.from("ausbildungsstand").select("wert").eq("schueler_id",s.id).then(({data})=>setPct(Math.round(((data||[]).filter(x=>x.wert===2).length/ALL.length)*100)));},[s.id]);
-  if(del) return <Card style={{padding:20}}><div style={{textAlign:"center",marginBottom:14}}><div style={{fontSize:36,marginBottom:8}}>⚠️</div><div style={{fontSize:16,fontWeight:600,color:T.label,fontFamily:F}}>{s.name} löschen?</div></div><div style={{display:"flex",gap:10}}><button onClick={()=>onDel(s.id)} style={{flex:1,background:T.blue,color:"#fff",border:"none",borderRadius:12,padding:"12px",fontWeight:600,cursor:"pointer",fontFamily:F}}>Löschen</button><button onClick={()=>setDel(false)} style={{flex:1,background:T.inset,border:`1px solid ${T.sep}`,borderRadius:12,padding:"12px",cursor:"pointer",fontFamily:F}}>Abbrechen</button></div></Card>;
+  if(del) return <Card style={{padding:20}}><div style={{textAlign:"center",marginBottom:14}}><div style={{fontSize:36,marginBottom:8}}>⚠️</div><div style={{fontSize:16,fontWeight:600,color:T.label,fontFamily:F}}>{s.name} löschen?</div></div><div style={{display:"flex",gap:10}}><button onClick={()=>onDel(s.id)} style={{flex:1,background:T.dangerBg,color:T.red,border:`1px solid ${T.red}66`,borderRadius:12,padding:"12px",fontWeight:600,cursor:"pointer",fontFamily:F}}>Löschen</button><button onClick={()=>setDel(false)} style={{flex:1,background:T.inset,border:`1px solid ${T.sep}`,borderRadius:12,padding:"12px",cursor:"pointer",fontFamily:F,color:T.label}}>Abbrechen</button></div></Card>;
   return (
+    <SwipeRow onSwipeLeft={onSwipeLeft} onSwipeRight={onSwipeRight} labelLeft={labelLeft} labelRight={labelRight} colorLeft={colorLeft}>
     <Card>
       <div onClick={onClick} style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:14,cursor:"pointer"}}>
         <Ring pct={pct} size={50} stroke={5}/>
-        <div style={{flex:1}}><div style={{fontSize:16,fontWeight:600,color:T.label,fontFamily:F}}>{s.name}</div><div style={{fontSize:12,color:T.label2,fontFamily:F,marginTop:2}}>{s.status==="aktiv"?"🟢 Aktiv":s.status==="abgeschlossen"?"✅ Abgeschlossen":"📦 Archiviert"}</div></div>
+        <div style={{flex:1}}><div style={{fontSize:16,fontWeight:600,color:T.label,fontFamily:F}}>{s.name}</div><div style={{fontSize:12,color:T.label2,fontFamily:F,marginTop:2}}>{s.status==="aktiv"?"🟢 Aktiv":s.status==="abgeschlossen"?"✅ Abgeschlossen":"📦 Archiviert"}{istMeine&&<span style={{color:T.blue,fontWeight:600}}> · Mein Schüler</span>}</div></div>
         <button onClick={e=>{e.stopPropagation();setShow(!show);}} style={{background:"none",border:"none",cursor:"pointer",fontSize:20,color:T.label2,padding:4}}>⋯</button>
       </div>
       {show&&<div style={{borderTop:`1px solid ${T.sep}`,display:"flex",flexWrap:"wrap",gap:8,padding:"10px 14px"}}>
@@ -321,6 +384,7 @@ function SRowFull({s,onClick,onSA,onDel}) {
         <button onClick={()=>setDel(true)} style={{fontSize:12,background:`${T.red}18`,color:T.red,border:"none",borderRadius:999,padding:"5px 12px",cursor:"pointer",fontWeight:600,fontFamily:F}}>🗑 Löschen</button>
       </div>}
     </Card>
+    </SwipeRow>
   );
 }
 
@@ -521,29 +585,48 @@ function DiagrammView({s,mat,setMat,onMat,isLehrer}) {
 
 // ── MATERIAL LISTE ──────────────────────────────────
 function MatListe({mat,onOpen}) {
+  const [sel,setSel]=useState(AUSBILDUNG[0].id);
+  const stufe=AUSBILDUNG.find(x=>x.id===sel)||AUSBILDUNG[0];
   return (
     <div style={{background:"transparent",minHeight:"100vh",padding:"20px 16px 0"}}>
-      <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,marginBottom:4,fontFamily:F}}>Material</div>
+      <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,marginBottom:4,fontFamily:F}}>Lernen</div>
       <div style={{fontSize:14,color:T.label2,marginBottom:20,fontFamily:F}}>Lernmaterial für alle Bereiche</div>
-      <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:24}}>
-        {AUSBILDUNG.map(s=>(
-          <div key={s.id} style={{background:T.white,borderRadius:16,overflow:"hidden",border:`1px solid ${T.glassBorder}`,boxShadow:T.s1,borderLeft:`3px solid ${s.color}`}}>
-            <div style={{padding:"13px 16px",display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${T.sep}`}}>
-              <span style={{fontSize:22}}>{s.icon}</span>
-              <div style={{flex:1}}><div style={{fontSize:15,fontWeight:600,color:T.label,fontFamily:F}}>{s.label}</div><div style={{fontSize:12,color:T.label2,fontFamily:F}}>{s.gruppen.flatMap(g=>g.items).length} Punkte</div></div>
-            </div>
-            {s.gruppen.map((g,gi)=>{
-              const mk=`${s.id}::${g.name}`;
-              const hm=mat&&mat[mk]&&(mat[mk].videoUrl||mat[mk].fotos?.length>0||mat[mk].quiz?.length>0||mat[mk].pdfUrl);
-              return <Row key={g.name} last={gi===s.gruppen.length-1} onClick={()=>onOpen(mk)}>
-                <div style={{flex:1}}><div style={{fontSize:14,fontWeight:500,color:T.label,fontFamily:F}}>{g.name}</div><div style={{fontSize:12,color:T.label2,fontFamily:F}}>{g.items.length} Punkte</div></div>
-                <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  {hm&&<span style={{fontSize:11,background:`${T.blue}18`,color:T.blue,borderRadius:999,padding:"3px 9px",fontWeight:600}}>Material</span>}
-                  <span style={{color:T.label3,fontSize:20}}>›</span>
-                </div>
-              </Row>;
-            })}
+      <div style={{display:"flex",gap:8,marginBottom:14,overflowX:"auto",paddingBottom:4}}>
+        {AUSBILDUNG.map(x=>{
+          const act=sel===x.id;
+          return <button key={x.id} onClick={()=>setSel(x.id)} style={{background:act?x.color:T.card,backdropFilter:"blur(10px)",border:`1px solid ${act?x.color:T.sep}`,borderRadius:14,padding:"10px 14px",flexShrink:0,display:"flex",flexDirection:"column",alignItems:"center",gap:3,minWidth:70,cursor:"pointer",fontFamily:F,transition:"all .2s"}}>
+            <span style={{fontSize:20}}>{x.icon}</span>
+            <span style={{fontSize:10,color:act?"#fff":T.label2,fontWeight:600}}>{x.label}</span>
+          </button>;
+        })}
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:12}}>
+        <div style={{background:T.white,borderRadius:16,overflow:"hidden",border:`1px solid ${T.glassBorder}`,borderLeft:`3px solid ${stufe.color}`}}>
+          <div style={{padding:"13px 16px",display:"flex",alignItems:"center",gap:10,borderBottom:`1px solid ${T.sep}`}}>
+            <span style={{fontSize:22}}>{stufe.icon}</span>
+            <div style={{flex:1}}><div style={{fontSize:15,fontWeight:600,color:T.label,fontFamily:F}}>{stufe.label}</div><div style={{fontSize:12,color:T.label2,fontFamily:F}}>{stufe.gruppen.flatMap(g=>g.items).length} Punkte</div></div>
           </div>
+          {stufe.gruppen.map((g,gi)=>{
+            const mk=`${stufe.id}::${g.name}`;
+            const hm=mat&&mat[mk]&&(mat[mk].videoUrl||mat[mk].fotos?.length>0||mat[mk].quiz?.length>0||mat[mk].pdfUrl);
+            return <Row key={g.name} last={gi===stufe.gruppen.length-1} onClick={()=>onOpen(mk)}>
+              <div style={{flex:1}}><div style={{fontSize:14,fontWeight:500,color:T.label,fontFamily:F}}>{g.name}</div><div style={{fontSize:12,color:T.label2,fontFamily:F}}>{g.items.length} Punkte</div></div>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                {hm&&<span style={{fontSize:11,background:`${T.blue}18`,color:T.blue,borderRadius:999,padding:"3px 9px",fontWeight:600}}>Material</span>}
+                <span style={{color:T.label3,fontSize:20}}>›</span>
+              </div>
+            </Row>;
+          })}
+        </div>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:24}}>
+        {[{e:"🛣️",t:"Prüfungsstrecken"},{e:"📖",t:"Theorie"}].map((x,i)=>(
+          <Card key={i} style={{padding:14,opacity:0.55}}>
+            <div style={{display:"flex",alignItems:"center",gap:12,justifyContent:"space-between"}}>
+              <div style={{display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:26}}>{x.e}</span><div style={{fontSize:15,fontWeight:600,color:T.label,fontFamily:F}}>{x.t}</div></div>
+              <div style={{background:`${T.purple}18`,color:T.purple,borderRadius:999,padding:"3px 10px",fontSize:11,fontWeight:700,fontFamily:F}}>Coming Soon</div>
+            </div>
+          </Card>
         ))}
       </div>
     </div>
