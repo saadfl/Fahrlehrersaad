@@ -83,7 +83,8 @@ const LERN = AUSBILDUNG.flatMap(x=>{
 const ALL = AUSBILDUNG.flatMap(s=>s.gruppen.flatMap(g=>g.items.map(i=>`${s.id}::${g.name}::${i}`)));
 const nxt = v => ((v||0)+1)%3;
 const KLASSEN = ["B","B197","BE","B96"];
-const DEFAULT_PROFIL = {name:"Saad",ort:"Münster, NRW",ueber_mich:"Als leidenschaftlicher Fahrlehrer in Münster helfe ich meinen Schülern, sicher und selbstbewusst ans Steuer zu kommen.",tags:["Klasse B","BE","10+ Jahre"],instagram:"@fahrlehrersaad",tiktok:"@fahrlehrersaad",youtube:"Fahrlehrer Saad",whatsapp:"Direkt schreiben"};
+const DEFAULT_PROFIL = {name:"Saad",ueber_mich:"Als leidenschaftlicher Fahrlehrer in Münster helfe ich meinen Schülern, sicher und selbstbewusst ans Steuer zu kommen.",tags:["Klasse B","BE","10+ Jahre"]};
+const EMPTY_SET = new Set();
 
 // ── UI COMPONENTS ───────────────────────────────────
 const Card = ({children,style={},onClick}) => (
@@ -111,10 +112,10 @@ const Ring = ({pct,size=72,stroke=6}) => {
   );
 };
 
-const TabBar = ({active,onChange,isLehrer}) => {
-  const tabs = isLehrer
+const TabBar = ({active,onChange,isLehrer,tabsOverride}) => {
+  const tabs = tabsOverride ? tabsOverride : isLehrer
     ? [{id:"home",e:"🏠",l:"Home"},{id:"schueler",e:"👥",l:"Schüler"},{id:"material",e:"📚",l:"Lernen"},{id:"profil",e:"👨‍🏫",l:"Profil"}]
-    : [{id:"home",e:"🏠",l:"Home"},{id:"diagramm",e:"📊",l:"Diagramm"},{id:"lernen",e:"📚",l:"Lernen"},{id:"profil",e:"👨‍🏫",l:"Fahrlehrer"}];
+    : [{id:"home",e:"🏠",l:"Home"},{id:"diagramm",e:"📊",l:"Diagramm"},{id:"lernen",e:"📚",l:"Lernen"},{id:"profil",e:"🏫",l:"Fahrschule"}];
   return (
     <div style={{position:"fixed",bottom:0,left:0,right:0,height:83,background:T.tabBg,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",borderTop:`1px solid ${T.tabBorder}`,display:"flex",alignItems:"flex-start",justifyContent:"space-around",padding:"10px 0 0",zIndex:999,fontFamily:F}}>
       {tabs.map(t=>(
@@ -269,7 +270,7 @@ function LehrerApp({onLogout,profil}) {
   const meineListe=aktiv.filter(s=>meine.has(String(s.id)));
 
   if(screen?.type==="s") return <div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}><NavBar title={screen.s.name} onBack={()=>{setScreen(null);ladeListe();}}/><div style={{paddingBottom:20}}><DiagrammView s={screen.s} mat={mat} setMat={setMat} onMat={k=>setScreen({type:"m",k,back:screen})} isLehrer/></div></div>;
-  if(screen?.type==="m") return <div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}><NavBar title={screen.k.split("::")[1]||"Material"} onBack={()=>setScreen(screen.back||null)}/><div style={{paddingBottom:20}}><MatView ik={screen.k} mat={mat} setMat={setMat} isLehrer/></div></div>;
+  if(screen?.type==="m") return <div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}><NavBar title={screen.k.split("::")[1]||"Material"} onBack={()=>setScreen(screen.back||null)}/><div style={{paddingBottom:20}}><MatView ik={screen.k} mat={mat} setMat={setMat} isLehrer={false}/></div></div>;
   if(screen?.type==="neu") return <div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}><NavBar title="Neuer Schüler" onBack={()=>setScreen(null)}/><NeuerS alsMeine={!!screen.meine} profilId={pid} onSaved={()=>{ladeListe();setScreen(null);}}/></div>;
 
   const tabs={
@@ -339,7 +340,8 @@ function SRow({s,onClick}) {
 }
 
 // ── SCHÜLER LISTE ───────────────────────────────────
-function SListe({aktiv,archiv,meine,onMeine,fehler,filter,setFilter,onOpen,onNeu,onRefresh}) {
+function SListe({aktiv,archiv,meine,onMeine,fehler,filter:filterProp,setFilter,onOpen,onNeu,onRefresh,ohneMeine}) {
+  const filter=ohneMeine&&filterProp==="meine"?"aktiv":filterProp;
   const [suche,setSuche]=useState(""); const [toast,setToast]=useState(null);
   const timer=useRef(null);
   const zeigeToast=(t,ms=5000)=>{setToast(t);clearTimeout(timer.current);timer.current=setTimeout(()=>setToast(null),ms);};
@@ -360,7 +362,7 @@ function SListe({aktiv,archiv,meine,onMeine,fehler,filter,setFilter,onOpen,onNeu
   };
   const meineWechsel=s=>meineSetzen(s,!meine.has(String(s.id)),true);
 
-  const tabs=[{l:`Aktiv (${aktiv.length})`,v:"aktiv"},{l:`Meine Schüler (${meineListe.length})`,v:"meine"},{l:`Archiv (${archiv.length})`,v:"archiv"}];
+  const tabs=ohneMeine?[{l:`Aktiv (${aktiv.length})`,v:"aktiv"},{l:`Archiv (${archiv.length})`,v:"archiv"}]:[{l:`Aktiv (${aktiv.length})`,v:"aktiv"},{l:`Meine Schüler (${meineListe.length})`,v:"meine"},{l:`Archiv (${archiv.length})`,v:"archiv"}];
   return (
     <div style={{background:"transparent",minHeight:"100vh",padding:"20px 16px 0"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:16}}>
@@ -372,7 +374,7 @@ function SListe({aktiv,archiv,meine,onMeine,fehler,filter,setFilter,onOpen,onNeu
         <span style={{color:T.label2}}>🔍</span>
         <input value={suche} onChange={e=>setSuche(e.target.value)} placeholder="Suchen..." style={{background:"none",border:"none",outline:"none",fontSize:15,color:T.label,flex:1,fontFamily:F}}/>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:0,background:T.inset,borderRadius:10,padding:2,marginBottom:16,border:`1px solid ${T.sep}`}}>
+      <div style={{display:"grid",gridTemplateColumns:ohneMeine?"1fr 1fr":"1fr 1fr 1fr",gap:0,background:T.inset,borderRadius:10,padding:2,marginBottom:16,border:`1px solid ${T.sep}`}}>
         {tabs.map(t=>(
           <button key={t.v} onClick={()=>setFilter(t.v)} style={{background:filter===t.v?T.sel:"transparent",border:"none",borderRadius:8,padding:"8px 4px",fontSize:12,fontWeight:600,cursor:"pointer",color:filter===t.v?T.label:T.label2,fontFamily:F,transition:"all .2s"}}>{t.l}</button>
         ))}
@@ -382,7 +384,7 @@ function SListe({aktiv,archiv,meine,onMeine,fehler,filter,setFilter,onOpen,onNeu
         {z.map(s=>{
           const ist=meine.has(String(s.id)); const imArchiv=filter==="archiv";
           return <SRowFull key={s.id} s={s} istMeine={ist} onClick={()=>onOpen(s)} onSA={statusAendern} onDel={loeschen}
-            onSwipeLeft={imArchiv?()=>reaktivieren(s):()=>meineWechsel(s)}
+            onSwipeLeft={imArchiv?()=>reaktivieren(s):ohneMeine?null:()=>meineWechsel(s)}
             labelLeft={imArchiv?"Reaktivieren":ist?"Aus Meine Schüler":"Meine Schüler"}
             colorLeft={imArchiv?T.green:T.blue}
             onSwipeRight={imArchiv?null:()=>archivieren(s)}
@@ -448,7 +450,7 @@ function NeuerS({onSaved,alsMeine,profilId}) {
 }
 
 // ── DIAGRAMM VIEW ───────────────────────────────────
-function DiagrammView({s,mat,setMat,onMat,isLehrer,startStufe}) {
+function DiagrammView({s,mat,setMat,onMat,isLehrer,startStufe,adminEdit}) {
   const [sel,setSel]=useState(startStufe||AUSBILDUNG[0].id);
   const [tab,setTab]=useState("diagramm");
   const [themen,setThemen]=useState({}); const [naechstes,setNaechstes]=useState({});
@@ -540,7 +542,7 @@ function DiagrammView({s,mat,setMat,onMat,isLehrer,startStufe}) {
               <div style={{padding:"13px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:`1px solid ${T.sep}`}}>
                 <span style={{fontSize:15,fontWeight:600,color:T.label,fontFamily:F}}>{g.name}</span>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <button onClick={()=>onMat&&onMat(mk)} style={{background:hm?`${T.blue}18`:`${T.gray}10`,color:hm?T.blue:T.gray,border:`1px solid ${hm?T.blue+"30":T.sep}`,borderRadius:999,padding:"4px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:F}}>{hm?"📚 Material":"+ Material"}</button>
+                  {(hm||adminEdit)&&<button onClick={()=>onMat&&onMat(mk)} style={{background:hm?`${T.blue}18`:`${T.gray}10`,color:hm?T.blue:T.gray,border:`1px solid ${hm?T.blue+"30":T.sep}`,borderRadius:999,padding:"4px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:F}}>{hm?"📚 Material":"+ Material"}</button>}
                   <span style={{fontSize:12,color:T.label2}}>{gb}/{g.items.length}</span>
                 </div>
               </div>
@@ -831,7 +833,6 @@ function QuizView({quiz,st,setSt,onBack}) {
 
 // ── PROFIL ──────────────────────────────────────────
 const ProfilKarte = ({p,label}) => {
-  const soc=[{icon:"📸",l:"Instagram",h:p.instagram,c:"#E1306C"},{icon:"🎵",l:"TikTok",h:p.tiktok,c:"#000"},{icon:"▶️",l:"YouTube",h:p.youtube,c:"#FF0000"},{icon:"💬",l:"WhatsApp",h:p.whatsapp,c:"#25D366"}].filter(x=>x.h);
   const lab={fontSize:11,fontWeight:700,color:T.label2,letterSpacing:0.8,textTransform:"uppercase",marginBottom:8,paddingLeft:4};
   return (
     <div style={{marginBottom:28}}>
@@ -840,7 +841,6 @@ const ProfilKarte = ({p,label}) => {
         <div style={{width:76,height:76,borderRadius:"50%",background:"rgba(255,255,255,0.18)",backdropFilter:"blur(10px)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:36,flexShrink:0,border:"2px solid rgba(255,255,255,0.3)"}}>👨‍🏫</div>
         <div>
           <div style={{fontSize:23,fontWeight:700,color:"#fff"}}>Fahrlehrer {p.name}</div>
-          {p.ort&&<div style={{fontSize:13,color:"rgba(255,255,255,0.75)",marginTop:3}}>📍 {p.ort}</div>}
           {(p.tags||[]).length>0&&<div style={{display:"flex",gap:6,marginTop:10,flexWrap:"wrap"}}>
             {p.tags.map((t,i)=><div key={i} style={{background:"rgba(255,255,255,0.18)",backdropFilter:"blur(8px)",borderRadius:999,padding:"4px 12px",fontSize:12,color:"#fff",fontWeight:500,border:"1px solid rgba(255,255,255,0.3)"}}>{t}</div>)}
           </div>}
@@ -848,27 +848,15 @@ const ProfilKarte = ({p,label}) => {
       </div>
       {p.ueber_mich&&<>
         <div style={lab}>Über mich</div>
-        <Card style={{padding:18,marginBottom:14}}>
+        <Card style={{padding:18}}>
           <div style={{fontSize:15,color:T.label,lineHeight:1.65}}>{p.ueber_mich}</div>
         </Card>
-      </>}
-      {soc.length>0&&<>
-        <div style={lab}>Social Media & Kontakt</div>
-        <div style={{background:T.white,borderRadius:16,overflow:"hidden",border:`1px solid ${T.glassBorder}`}}>
-          {soc.map((x,i,a)=>(
-            <Row key={i} last={i===a.length-1}>
-              <div style={{width:38,height:38,borderRadius:10,background:x.c,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,marginRight:14}}>{x.icon}</div>
-              <div style={{flex:1}}><div style={{fontSize:15,fontWeight:500,color:T.label}}>{x.l}</div><div style={{fontSize:13,color:T.label2}}>{x.h}</div></div>
-              <span style={{color:T.label3,fontSize:22}}>›</span>
-            </Row>
-          ))}
-        </div>
       </>}
     </div>
   );
 };
 
-function Profil({onLogout,isLehrer,profil,fahrlehrer=[],meineIds=[]}) {
+function Profil({onLogout,isLehrer,profil,fahrlehrer=[],meineIds=[],standorte=[]}) {
   let karten=[];
   if(isLehrer){karten=[{p:profil||DEFAULT_PROFIL}];}
   else{
@@ -883,7 +871,19 @@ function Profil({onLogout,isLehrer,profil,fahrlehrer=[],meineIds=[]}) {
   }
   return (
     <div style={{background:"transparent",minHeight:"100vh",padding:"20px 16px 0",fontFamily:F}}>
-      <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,marginBottom:16}}>{isLehrer?"Mein Profil":"Fahrlehrer"}</div>
+      <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,marginBottom:16}}>{isLehrer?"Mein Profil":"Fahrschule"}</div>
+      {!isLehrer&&standorte.length>0&&<div style={{marginBottom:28}}>
+        <div style={{fontSize:11,fontWeight:700,color:T.label2,letterSpacing:0.8,textTransform:"uppercase",marginBottom:8,paddingLeft:4}}>Standorte</div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {standorte.map(o=><Card key={o.id} style={{padding:16}}>
+            <div style={{fontSize:16,fontWeight:600,color:T.label,marginBottom:6}}>{o.name}</div>
+            {o.adresse&&<div style={{fontSize:14,color:T.label2,marginBottom:3}}>📍 {o.adresse}</div>}
+            {o.telefon&&<div style={{fontSize:14,color:T.label2,marginBottom:3}}>📞 {o.telefon}</div>}
+            {o.oeffnungszeiten&&<div style={{fontSize:14,color:T.label2,whiteSpace:"pre-wrap"}}>🕒 {o.oeffnungszeiten}</div>}
+          </Card>)}
+        </div>
+      </div>}
+      {!isLehrer&&<div style={{fontSize:11,fontWeight:700,color:T.label2,letterSpacing:0.8,textTransform:"uppercase",marginBottom:10,paddingLeft:4}}>Fahrlehrer</div>}
       {karten.map((k,i)=><ProfilKarte key={k.p.id||i} p={k.p} label={k.label}/>)}
       <button onClick={onLogout} style={{width:"100%",background:T.card,backdropFilter:"blur(20px)",border:`1px solid ${T.sep}`,borderRadius:14,padding:"14px",fontSize:16,fontWeight:500,cursor:"pointer",color:T.red,fontFamily:F,marginBottom:24}}>Abmelden</button>
     </div>
@@ -891,34 +891,169 @@ function Profil({onLogout,isLehrer,profil,fahrlehrer=[],meineIds=[]}) {
 }
 
 // ── ADMIN ───────────────────────────────────────────
+const ADMIN_TABS=[{id:"dashboard",e:"🏠",l:"Dashboard"},{id:"schueler",e:"👥",l:"Schüler"},{id:"lernen",e:"📚",l:"Lernen"},{id:"fahrschule",e:"🏫",l:"Fahrschule"}];
+
+async function uploadBild(file){
+  const n=`meldung_${Date.now()}.${file.name.split(".").pop()||"jpg"}`;
+  for(const b of["Lernmaterial","lernmaterial"]){
+    const{error}=await supabase.storage.from(b).upload(n,file,{upsert:true,contentType:file.type});
+    if(!error){const{data:u}=supabase.storage.from(b).getPublicUrl(n);return u.publicUrl;}
+  }
+  return null;
+}
+
 function AdminApp({onLogout}) {
-  const [liste,setListe]=useState([]); const [screen,setScreen]=useState(null); const [fehler,setFehler]=useState("");
+  const [tab,setTab]=useState("dashboard");
+  const [liste,setListe]=useState([]); const [mat,setMat]=useState({});
+  const [screen,setScreen]=useState(null); const [filter,setFilter]=useState("aktiv");
+
+  const ladeListe=useCallback(async()=>{const{data}=await supabase.from("schueler").select("*").order("name");setListe(data||[]);},[]);
+  const ladeMat=useCallback(async()=>{
+    const[m,q]=await Promise.all([supabase.from("lernmaterial").select("*"),supabase.from("quiz_fragen").select("*")]);
+    const map={};
+    (m.data||[]).forEach(x=>{map[x.item_key]={videoUrl:x.video_url||"",fotos:x.fotos||[],quiz:[],pdfUrl:x.pdf_url||"",pdfName:x.pdf_name||""};});
+    (q.data||[]).forEach(x=>{if(!map[x.item_key])map[x.item_key]={videoUrl:"",fotos:[],quiz:[],pdfUrl:"",pdfName:""};map[x.item_key].quiz.push({id:x.id,frage:x.frage,typ:x.typ,antworten:x.antworten||[],richtig:x.richtig,erklaerung:x.erklaerung||"",bildUrl:x.bild_url||""});});
+    setMat(map);
+  },[]);
+  useEffect(()=>{ladeListe();ladeMat();},[ladeListe,ladeMat]);
+
+  const aktiv=liste.filter(s=>!["archiviert","abgeschlossen"].includes(s.status||"aktiv"));
+  const archiv=liste.filter(s=>["archiviert","abgeschlossen"].includes(s.status||"aktiv"));
+  const seite=(titel,onBack,inhalt)=><div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}><NavBar title={titel} onBack={onBack}/>{inhalt}</div>;
+
+  if(screen?.type==="s") return seite(screen.s.name,()=>{setScreen(null);ladeListe();},<div style={{paddingBottom:20}}><DiagrammView s={screen.s} mat={mat} setMat={setMat} onMat={k=>setScreen({type:"m",k,back:screen})} isLehrer adminEdit/></div>);
+  if(screen?.type==="m") return seite(screen.k.split("::")[1]||"Material",()=>setScreen(screen.back||null),<div style={{paddingBottom:20}}><MatView ik={screen.k} mat={mat} setMat={setMat} isLehrer/></div>);
+  if(screen?.type==="neu") return seite("Neuer Schüler",()=>setScreen(null),<NeuerS alsMeine={false} onSaved={()=>{ladeListe();setScreen(null);}}/>);
+
+  const inhalt={
+    dashboard:<AdminDashboard/>,
+    schueler:<SListe aktiv={aktiv} archiv={archiv} meine={EMPTY_SET} onMeine={async()=>null} ohneMeine filter={filter} setFilter={setFilter} onOpen={s=>setScreen({type:"s",s})} onNeu={()=>setScreen({type:"neu"})} onRefresh={ladeListe}/>,
+    lernen:<MatListe mat={mat} onOpen={k=>setScreen({type:"m",k,back:null})}/>,
+    fahrschule:<AdminFahrschule onLogout={onLogout}/>,
+  };
+  return <div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}><div style={{paddingBottom:83}}>{inhalt[tab]}</div><TabBar active={tab} onChange={setTab} tabsOverride={ADMIN_TABS}/></div>;
+}
+
+function AdminDashboard() {
+  const [text,setText]=useState(""); const [bild,setBild]=useState(""); const [busy,setBusy]=useState(false);
+  const [fehler,setFehler]=useState(""); const [liste,setListe]=useState([]);
   const laden=useCallback(async()=>{
-    const {data,error}=await supabase.from("fahrlehrer_profil").select("*").eq("rolle","lehrer").order("erstellt_am");
-    if(error){setFehler("Fahrlehrer konnten nicht geladen werden: "+error.message);}
-    else{setFehler("");setListe(data||[]);}
+    const {data,error}=await supabase.from("meldungen").select("*").order("erstellt_am",{ascending:false});
+    if(error)setFehler("Meldungen konnten nicht geladen werden: "+error.message);else setListe(data||[]);
+  },[]);
+  useEffect(()=>{laden();},[laden]);
+  const waehleBild=async f=>{
+    if(!f)return; setBusy(true);setFehler("");
+    const u=await uploadBild(f);
+    if(u)setBild(u);else setFehler("Foto konnte nicht hochgeladen werden.");
+    setBusy(false);
+  };
+  const posten=async()=>{
+    if(!text.trim()&&!bild){setFehler("Text oder Foto angeben.");return;}
+    setBusy(true);setFehler("");
+    const {error}=await supabase.from("meldungen").insert({text:text.trim(),bild_url:bild});
+    setBusy(false);
+    if(error){setFehler("Fehler: "+error.message);return;}
+    setText("");setBild("");laden();
+  };
+  const loeschen=async id=>{
+    if(!window.confirm("Meldung löschen?"))return;
+    const {error}=await supabase.from("meldungen").delete().eq("id",id);
+    if(error)setFehler("Fehler: "+error.message);else laden();
+  };
+  return (
+    <div style={{background:"transparent",minHeight:"100vh",padding:"20px 16px 0",fontFamily:F}}>
+      <div style={{marginBottom:24}}>
+        <div style={{fontSize:11,color:T.blue,fontWeight:700,letterSpacing:1,marginBottom:2}}>ADMIN</div>
+        <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5}}>Dashboard</div>
+      </div>
+      <Card style={{padding:18,marginBottom:20}}>
+        <div style={{fontSize:15,fontWeight:600,color:T.label,marginBottom:12}}>Neue Meldung für alle Schüler</div>
+        <textarea value={text} onChange={e=>setText(e.target.value)} placeholder="Meldung schreiben..." style={{width:"100%",boxSizing:"border-box",background:T.inset,border:`1px solid ${T.sep}`,borderRadius:12,padding:"12px",fontSize:14,color:T.label,outline:"none",minHeight:90,resize:"vertical",fontFamily:F,marginBottom:10}}/>
+        {bild&&<div style={{position:"relative",marginBottom:10}}>
+          <img src={bild} alt="" style={{width:"100%",maxHeight:220,objectFit:"cover",borderRadius:12,display:"block"}}/>
+          <button onClick={()=>setBild("")} style={{position:"absolute",top:8,right:8,background:"rgba(0,0,0,0.55)",border:"none",borderRadius:"50%",width:30,height:30,color:"#fff",fontSize:16,cursor:"pointer"}}>✕</button>
+        </div>}
+        <label style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:T.inset,border:`1px solid ${T.sep}`,borderRadius:12,padding:"11px",cursor:"pointer",fontSize:14,color:T.label2,marginBottom:10}}>🖼 {bild?"Anderes Foto wählen":"Foto hochladen"}<input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{waehleBild(e.target.files[0]);e.target.value="";}}/></label>
+        {fehler&&<div style={{background:T.dangerBg,color:T.red,borderRadius:10,padding:"10px 14px",fontSize:13,marginBottom:10}}>{fehler}</div>}
+        <button onClick={posten} disabled={busy} style={{width:"100%",background:T.blue,color:"#fff",border:"none",borderRadius:14,padding:14,fontSize:16,fontWeight:600,cursor:"pointer",opacity:busy?0.7:1,fontFamily:F}}>{busy?"Bitte warten...":"Meldung posten"}</button>
+      </Card>
+      <div style={{fontSize:11,color:T.label2,fontWeight:700,letterSpacing:0.8,textTransform:"uppercase",marginBottom:12}}>Gepostete Meldungen</div>
+      <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:24}}>
+        {liste.length===0&&<Card style={{padding:32,textAlign:"center"}}><div style={{color:T.label2}}>Noch keine Meldungen</div></Card>}
+        {liste.map(m=><Card key={m.id} style={{overflow:"hidden"}}>
+          {m.bild_url&&<img src={m.bild_url} alt="" style={{width:"100%",maxHeight:220,objectFit:"cover",display:"block"}}/>}
+          <div style={{padding:16}}>
+            {m.text&&<div style={{fontSize:15,color:T.label,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{m.text}</div>}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:m.text?10:0}}>
+              <span style={{fontSize:12,color:T.label2}}>{new Date(m.erstellt_am).toLocaleDateString("de-DE",{day:"2-digit",month:"long",year:"numeric"})}</span>
+              <button onClick={()=>loeschen(m.id)} style={{background:"none",border:"none",cursor:"pointer",color:T.label2,fontSize:16}}>🗑</button>
+            </div>
+          </div>
+        </Card>)}
+      </div>
+    </div>
+  );
+}
+
+function AdminFahrschule({onLogout}) {
+  const [fl,setFl]=useState([]); const [so,setSo]=useState([]); const [screen,setScreen]=useState(null); const [fehler,setFehler]=useState("");
+  const laden=useCallback(async()=>{
+    const[a,b]=await Promise.all([
+      supabase.from("fahrlehrer_profil").select("*").eq("rolle","lehrer").order("erstellt_am"),
+      supabase.from("standorte").select("*").order("erstellt_am"),
+    ]);
+    const e=a.error?.message||b.error?.message;
+    if(e){setFehler("Daten konnten nicht geladen werden: "+e);}
+    else{setFehler("");}
+    setFl(a.data||[]);setSo(b.data||[]);
   },[]);
   useEffect(()=>{laden();},[laden]);
 
-  if(screen) return <div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}><NavBar title={screen.p?`Fahrlehrer ${screen.p.name}`:"Neuer Fahrlehrer"} onBack={()=>setScreen(null)}/><FahrlehrerForm p={screen.p} onDone={()=>{laden();setScreen(null);}}/></div>;
+  if(screen?.kind==="fl") return <div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}><NavBar title={screen.p?`Fahrlehrer ${screen.p.name}`:"Neuer Fahrlehrer"} onBack={()=>setScreen(null)}/><FahrlehrerForm p={screen.p} onDone={()=>{laden();setScreen(null);}}/></div>;
+  if(screen?.kind==="so") return <div style={{fontFamily:F,background:"transparent",minHeight:"100vh"}}><NavBar title={screen.p?screen.p.name:"Neuer Standort"} onBack={()=>setScreen(null)}/><StandortForm p={screen.p} onDone={()=>{laden();setScreen(null);}}/></div>;
 
+  const kopf=(titel,onNeu)=><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+    <div style={{fontSize:11,color:T.label2,fontWeight:700,letterSpacing:0.8,textTransform:"uppercase"}}>{titel}</div>
+    <button onClick={onNeu} style={{background:T.blue,color:"#fff",border:"none",borderRadius:999,padding:"7px 16px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:F}}>+ Neu</button>
+  </div>;
   return (
     <div style={{fontFamily:F,background:"transparent",minHeight:"100vh",padding:"20px 16px 0"}}>
       <div style={{marginBottom:24}}>
         <div style={{fontSize:11,color:T.blue,fontWeight:700,letterSpacing:1,marginBottom:2}}>ADMIN</div>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
-          <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5}}>Fahrlehrer</div>
-          <button onClick={()=>setScreen({p:null})} style={{background:T.blue,color:"#fff",border:"none",borderRadius:999,padding:"8px 16px",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:F}}>+ Neu</button>
-        </div>
+        <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5}}>Fahrschule</div>
       </div>
       {fehler&&<div style={{background:T.dangerBg,color:T.red,borderRadius:10,padding:"10px 14px",fontSize:13,marginBottom:14,border:`1px solid ${T.red}33`}}>{fehler}</div>}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:24}}>
+        {[{v:fl.length,l:"Fahrlehrer",e:"👨‍🏫",c:T.blue},{v:so.length,l:"Standorte",e:"📍",c:T.green}].map((x,i)=>(
+          <Card key={i} style={{padding:"14px 10px",textAlign:"center"}}>
+            <div style={{fontSize:22,marginBottom:4}}>{x.e}</div>
+            <div style={{fontSize:26,fontWeight:700,color:x.c}}>{x.v}</div>
+            <div style={{fontSize:11,color:T.label2,marginTop:2}}>{x.l}</div>
+          </Card>
+        ))}
+      </div>
+      {kopf("Fahrlehrer",()=>setScreen({kind:"fl",p:null}))}
       <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:24}}>
-        {liste.length===0&&!fehler&&<Card style={{padding:32,textAlign:"center"}}><div style={{color:T.label2}}>Noch keine Fahrlehrer</div></Card>}
-        {liste.map(f=>(
-          <Card key={f.id} onClick={()=>setScreen({p:f})} style={{padding:"14px 16px"}}>
+        {fl.length===0&&<Card style={{padding:24,textAlign:"center"}}><div style={{color:T.label2}}>Noch keine Fahrlehrer</div></Card>}
+        {fl.map(f=>(
+          <Card key={f.id} onClick={()=>setScreen({kind:"fl",p:f})} style={{padding:"14px 16px"}}>
             <div style={{display:"flex",alignItems:"center",gap:14}}>
               <div style={{width:44,height:44,borderRadius:"50%",background:"rgba(255,255,255,0.12)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>👨‍🏫</div>
-              <div style={{flex:1}}><div style={{fontSize:16,fontWeight:600,color:T.label}}>{f.name}</div>{f.ort&&<div style={{fontSize:12,color:T.label2,marginTop:2}}>📍 {f.ort}</div>}</div>
+              <div style={{flex:1,fontSize:16,fontWeight:600,color:T.label}}>{f.name}</div>
+              <span style={{color:T.label3,fontSize:22}}>›</span>
+            </div>
+          </Card>
+        ))}
+      </div>
+      {kopf("Standorte",()=>setScreen({kind:"so",p:null}))}
+      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:24}}>
+        {so.length===0&&<Card style={{padding:24,textAlign:"center"}}><div style={{color:T.label2}}>Noch keine Standorte</div></Card>}
+        {so.map(o=>(
+          <Card key={o.id} onClick={()=>setScreen({kind:"so",p:o})} style={{padding:"14px 16px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:14}}>
+              <div style={{width:44,height:44,borderRadius:"50%",background:"rgba(255,255,255,0.12)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>📍</div>
+              <div style={{flex:1}}><div style={{fontSize:16,fontWeight:600,color:T.label}}>{o.name}</div>{o.adresse&&<div style={{fontSize:12,color:T.label2,marginTop:2}}>{o.adresse}</div>}</div>
               <span style={{color:T.label3,fontSize:22}}>›</span>
             </div>
           </Card>
@@ -930,7 +1065,7 @@ function AdminApp({onLogout}) {
 }
 
 function FahrlehrerForm({p,onDone}) {
-  const [f,setF]=useState({name:p?.name||"",pin:p?.pin||"",ort:p?.ort||"",ueber_mich:p?.ueber_mich||"",tags:(p?.tags||[]).join(", "),instagram:p?.instagram||"",tiktok:p?.tiktok||"",youtube:p?.youtube||"",whatsapp:p?.whatsapp||""});
+  const [f,setF]=useState({name:p?.name||"",pin:p?.pin||"",ueber_mich:p?.ueber_mich||"",tags:(p?.tags||[]).join(", ")});
   const [err,setErr]=useState(""); const [saving,setSaving]=useState(false); const [del,setDel]=useState(false);
   const inp={width:"100%",boxSizing:"border-box",background:T.inset,border:`1px solid ${T.sep}`,borderRadius:12,padding:"12px 16px",fontSize:15,color:T.label,outline:"none",fontFamily:F};
   const feld=(label,key,extra={})=><div style={{marginBottom:14}}><div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:7}}>{label}</div><input style={inp} value={f[key]} onChange={e=>setF({...f,[key]:extra.digits?e.target.value.replace(/\D/g,""):e.target.value})} placeholder={extra.ph||""} maxLength={extra.max}/></div>;
@@ -938,7 +1073,7 @@ function FahrlehrerForm({p,onDone}) {
     if(!f.name.trim()){setErr("Namen eingeben.");return;}
     if(f.pin.length<4){setErr("PIN mind. 4 Stellen.");return;}
     setSaving(true);setErr("");
-    const row={rolle:"lehrer",name:f.name.trim(),pin:f.pin,ort:f.ort.trim(),ueber_mich:f.ueber_mich.trim(),tags:f.tags.split(",").map(x=>x.trim()).filter(Boolean),instagram:f.instagram.trim(),tiktok:f.tiktok.trim(),youtube:f.youtube.trim(),whatsapp:f.whatsapp.trim()};
+    const row={rolle:"lehrer",name:f.name.trim(),pin:f.pin,ueber_mich:f.ueber_mich.trim(),tags:f.tags.split(",").map(x=>x.trim()).filter(Boolean)};
     const {error}=p?await supabase.from("fahrlehrer_profil").update(row).eq("id",p.id):await supabase.from("fahrlehrer_profil").insert(row);
     setSaving(false);
     if(error){setErr("Fehler: "+error.message);return;}
@@ -955,19 +1090,51 @@ function FahrlehrerForm({p,onDone}) {
         <div style={{fontSize:20,fontWeight:700,color:T.label,marginBottom:20}}>{p?"Profil bearbeiten":"Neuer Fahrlehrer"}</div>
         {feld("Name *","name",{ph:"z.B. Max"})}
         {feld("PIN (mind. 4 Stellen) *","pin",{digits:true,max:8})}
-        {feld("Ort","ort",{ph:"z.B. Münster, NRW"})}
         <div style={{marginBottom:14}}><div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:7}}>Über mich</div><textarea style={{...inp,minHeight:100,resize:"vertical"}} value={f.ueber_mich} onChange={e=>setF({...f,ueber_mich:e.target.value})}/></div>
         {feld("Etiketten (mit Komma trennen)","tags",{ph:"Klasse B, BE, 10+ Jahre"})}
-        {feld("Instagram","instagram",{ph:"@name"})}
-        {feld("TikTok","tiktok",{ph:"@name"})}
-        {feld("YouTube","youtube")}
-        {feld("WhatsApp","whatsapp")}
         {err&&<div style={{background:T.dangerBg,color:T.red,borderRadius:10,padding:"10px 14px",fontSize:13,marginBottom:14}}>{err}</div>}
         <button onClick={save} disabled={saving} style={{width:"100%",background:T.blue,color:"#fff",border:"none",borderRadius:14,padding:14,fontSize:16,fontWeight:600,cursor:"pointer",opacity:saving?0.7:1,fontFamily:F}}>{saving?"Speichern...":"✓ Speichern"}</button>
       </Card>
       {p&&(del
         ?<Card style={{padding:20}}><div style={{textAlign:"center",marginBottom:14,fontSize:16,fontWeight:600,color:T.label}}>{p.name} löschen?</div><div style={{display:"flex",gap:10}}><button onClick={loeschen} style={{flex:1,background:T.dangerBg,color:T.red,border:`1px solid ${T.red}66`,borderRadius:12,padding:"12px",fontWeight:600,cursor:"pointer",fontFamily:F}}>Löschen</button><button onClick={()=>setDel(false)} style={{flex:1,background:T.inset,border:`1px solid ${T.sep}`,borderRadius:12,padding:"12px",cursor:"pointer",fontFamily:F,color:T.label}}>Abbrechen</button></div></Card>
         :<button onClick={()=>setDel(true)} style={{width:"100%",background:T.dangerBg,color:T.red,border:`1px solid ${T.red}66`,borderRadius:14,padding:"14px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:F}}>🗑 Fahrlehrer löschen</button>)}
+    </div>
+  );
+}
+
+function StandortForm({p,onDone}) {
+  const [f,setF]=useState({name:p?.name||"",adresse:p?.adresse||"",telefon:p?.telefon||"",oeffnungszeiten:p?.oeffnungszeiten||""});
+  const [err,setErr]=useState(""); const [saving,setSaving]=useState(false); const [del,setDel]=useState(false);
+  const inp={width:"100%",boxSizing:"border-box",background:T.inset,border:`1px solid ${T.sep}`,borderRadius:12,padding:"12px 16px",fontSize:15,color:T.label,outline:"none",fontFamily:F};
+  const feld=(label,key,ph)=><div style={{marginBottom:14}}><div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:7}}>{label}</div><input style={inp} value={f[key]} onChange={e=>setF({...f,[key]:e.target.value})} placeholder={ph||""}/></div>;
+  const save=async()=>{
+    if(!f.name.trim()){setErr("Namen eingeben.");return;}
+    setSaving(true);setErr("");
+    const row={name:f.name.trim(),adresse:f.adresse.trim(),telefon:f.telefon.trim(),oeffnungszeiten:f.oeffnungszeiten.trim()};
+    const {error}=p?await supabase.from("standorte").update(row).eq("id",p.id):await supabase.from("standorte").insert(row);
+    setSaving(false);
+    if(error){setErr("Fehler: "+error.message);return;}
+    onDone();
+  };
+  const loeschen=async()=>{
+    const {error}=await supabase.from("standorte").delete().eq("id",p.id);
+    if(error){setErr("Fehler: "+error.message);setDel(false);return;}
+    onDone();
+  };
+  return (
+    <div style={{padding:"20px 16px",fontFamily:F}}>
+      <Card style={{padding:24,marginBottom:14}}>
+        <div style={{fontSize:20,fontWeight:700,color:T.label,marginBottom:20}}>{p?"Standort bearbeiten":"Neuer Standort"}</div>
+        {feld("Name *","name","z.B. Filiale Metzer Straße")}
+        {feld("Adresse","adresse","Straße, PLZ Ort")}
+        {feld("Telefon","telefon")}
+        <div style={{marginBottom:14}}><div style={{fontSize:13,color:T.label2,fontWeight:500,marginBottom:7}}>Öffnungszeiten</div><textarea style={{...inp,minHeight:90,resize:"vertical"}} value={f.oeffnungszeiten} onChange={e=>setF({...f,oeffnungszeiten:e.target.value})} placeholder={"Mo–Fr 9–18 Uhr"}/></div>
+        {err&&<div style={{background:T.dangerBg,color:T.red,borderRadius:10,padding:"10px 14px",fontSize:13,marginBottom:14}}>{err}</div>}
+        <button onClick={save} disabled={saving} style={{width:"100%",background:T.blue,color:"#fff",border:"none",borderRadius:14,padding:14,fontSize:16,fontWeight:600,cursor:"pointer",opacity:saving?0.7:1,fontFamily:F}}>{saving?"Speichern...":"✓ Speichern"}</button>
+      </Card>
+      {p&&(del
+        ?<Card style={{padding:20}}><div style={{textAlign:"center",marginBottom:14,fontSize:16,fontWeight:600,color:T.label}}>{p.name} löschen?</div><div style={{display:"flex",gap:10}}><button onClick={loeschen} style={{flex:1,background:T.dangerBg,color:T.red,border:`1px solid ${T.red}66`,borderRadius:12,padding:"12px",fontWeight:600,cursor:"pointer",fontFamily:F}}>Löschen</button><button onClick={()=>setDel(false)} style={{flex:1,background:T.inset,border:`1px solid ${T.sep}`,borderRadius:12,padding:"12px",cursor:"pointer",fontFamily:F,color:T.label}}>Abbrechen</button></div></Card>
+        :<button onClick={()=>setDel(true)} style={{width:"100%",background:T.dangerBg,color:T.red,border:`1px solid ${T.red}66`,borderRadius:14,padding:"14px",fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:F}}>🗑 Standort löschen</button>)}
     </div>
   );
 }
@@ -980,19 +1147,23 @@ function SchuelerApp({schueler,onLogout}) {
   const [mat,setMat]=useState({}); const [screen,setScreen]=useState(null);
   const [selStufe,setSelStufe]=useState(null); const [load,setLoad]=useState(true);
   const [fahrlehrer,setFahrlehrer]=useState([]); const [meineIds,setMeineIds]=useState([]);
+  const [meldungen,setMeldungen]=useState([]); const [standorte,setStandorte]=useState([]);
 
   useEffect(()=>{
     const l=async()=>{
       setLoad(true);
-      const[t,n,i,m,q,f,ms]=await Promise.all([
+      const[t,n,i,m,q,f,ms,md,so]=await Promise.all([
         supabase.from("ausbildungsstand").select("*").eq("schueler_id",schueler.id),
         supabase.from("notizen").select("*").eq("schueler_id",schueler.id).order("erstellt_am",{ascending:false}),
         supabase.from("schueler_info").select("*").eq("schueler_id",schueler.id).single(),
         supabase.from("lernmaterial").select("*"),
         supabase.from("quiz_fragen").select("*"),
-        supabase.from("fahrlehrer_profil").select("id,name,ort,ueber_mich,tags,instagram,tiktok,youtube,whatsapp,erstellt_am").eq("rolle","lehrer").order("erstellt_am"),
+        supabase.from("fahrlehrer_profil").select("id,name,ueber_mich,tags,erstellt_am").eq("rolle","lehrer").order("erstellt_am"),
         supabase.from("meine_schueler").select("fahrlehrer_id,erstellt_am").eq("schueler_id",String(schueler.id)).order("erstellt_am"),
+        supabase.from("meldungen").select("*").order("erstellt_am",{ascending:false}),
+        supabase.from("standorte").select("*").order("erstellt_am"),
       ]);
+      setMeldungen(md.data||[]);setStandorte(so.data||[]);
       setFahrlehrer(f.data||[]);setMeineIds((ms.data||[]).map(x=>x.fahrlehrer_id));
       const tm={},nm={};
       (t.data||[]).forEach(x=>{tm[x.item_key]=Number(x.wert);if(x.naechstes)nm[x.item_key]=true;});
@@ -1017,6 +1188,15 @@ function SchuelerApp({schueler,onLogout}) {
           <div style={{fontSize:11,color:T.blue,fontWeight:700,letterSpacing:1}}>FAHRLEHRER SAAD</div>
           <div style={{fontSize:34,fontWeight:700,color:T.label,letterSpacing:-0.5,fontFamily:F}}>Hallo, {schueler.name.split(" ")[0]}! 👋</div>
         </div>
+        {meldungen.length>0&&<div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:14}}>
+          {meldungen.map(m=><Card key={m.id} style={{overflow:"hidden"}}>
+            {m.bild_url&&<img src={m.bild_url} alt="" style={{width:"100%",maxHeight:260,objectFit:"cover",display:"block"}}/>}
+            <div style={{padding:16}}>
+              {m.text&&<div style={{fontSize:15,color:T.label,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{m.text}</div>}
+              <div style={{fontSize:11,color:T.label2,marginTop:m.text?8:0}}>{new Date(m.erstellt_am).toLocaleDateString("de-DE",{day:"2-digit",month:"long",year:"numeric"})}</div>
+            </div>
+          </Card>)}
+        </div>}
         <Card style={{padding:20,marginBottom:14}}>
           <div style={{fontSize:11,fontWeight:700,color:T.label2,letterSpacing:0.8,textTransform:"uppercase",marginBottom:12}}>Mein Fortschritt</div>
           <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:16}}>
@@ -1047,7 +1227,7 @@ function SchuelerApp({schueler,onLogout}) {
 
     if(tab==="lernen") return <MatListe mat={mat} themen={themen} nurMitMaterial onOpen={k=>setScreen({type:"mat",k})}/>;
 
-    if(tab==="profil") return <Profil onLogout={onLogout} isLehrer={false} fahrlehrer={fahrlehrer} meineIds={meineIds}/>;
+    if(tab==="profil") return <Profil onLogout={onLogout} isLehrer={false} fahrlehrer={fahrlehrer} meineIds={meineIds} standorte={standorte}/>;
     return null;
   };
 
